@@ -3,6 +3,9 @@ using System.Collections.Generic;
 
 namespace Telescopes
 {
+    /// <summary>
+    /// A class that represents a telescoping shell.
+    /// </summary>
     [RequireComponent(typeof(MeshFilter))]
     public class TelescopingShell : MonoBehaviour
     {
@@ -11,9 +14,19 @@ namespace Telescopes
         private int currentIndex;
 
         public float length, radius;
-        public Vector3 startPosition, startDirection;
         public float curvatureAmount;
-        public Vector3 curvatureDirection;
+        public float twistAngle;
+        
+        public float baseRadians;
+
+        public bool isRoot = false;
+        public float extensionRatio = 0;
+
+        private float oldRatio = 0;
+        private float interpTimespan = 0;
+        private bool currentlyInterp = false;
+        private float targetRatio = 0;
+        private float ratioInterpTime = 0;
 
         // Use this for initialization
         void Awake()
@@ -29,7 +42,6 @@ namespace Telescopes
             {
                 mRenderer = gameObject.AddComponent<MeshRenderer>();
             }
-            Debug.Log(mFilter);
         }
 
         public void setMaterial(Material m)
@@ -37,6 +49,88 @@ namespace Telescopes
             mRenderer.material = m;
         }
 
+        public float radiansOfLength(float arcLength)
+        {
+            if (curvatureAmount > 1e-6)
+                return arcLength * curvatureAmount;
+            else return arcLength;
+        }
+
+        public Vector3 getLocalLocationAlongPath(float t)
+        {
+            float arcLength = t * length;
+            return translationOfDistance(arcLength);
+        }
+
+        public Vector3 translationOfDistance(float arcLength)
+        {
+            if (curvatureAmount > 1e-6)
+            {
+                float curvatureRadius = 1f / curvatureAmount;
+
+                // Start at the bottom of the circle.
+                float baseAngle = 3 * Mathf.PI / 2 + baseRadians;
+
+                // Compute how many radians we moved.
+                float radians = arcLength * curvatureAmount;
+                float finalAngle = baseAngle + radians;
+
+                // Compute on the circle centered at (0, 0, 0),
+                // and then add (0, r, 0).
+                Vector3 center = Vector3.up * curvatureRadius;
+                Vector3 displacement = Vector3.zero;
+                displacement.z = Mathf.Cos(finalAngle) * curvatureRadius;
+                displacement.y = Mathf.Sin(finalAngle) * curvatureRadius;
+                displacement += center;
+                return displacement;
+            }
+            else
+            {
+                Vector3 displacement = (arcLength + baseRadians) * Vector3.forward;
+                return displacement;
+            }
+        }
+
+        public Quaternion getLocalRotationAlongPath(float t, float twistT = 0)
+        {
+            if (curvatureAmount > 1e-6)
+            {
+                // Compute how many radians along the circle we moved.
+                float arcLength = t * length;
+                Quaternion rotation = rotationOfDistance(arcLength);
+                if (twistT > 0)
+                {
+                    Vector3 forwardAxis = rotation * Vector3.forward;
+                    Quaternion roll = Quaternion.AngleAxis(-twistAngle * twistT, forwardAxis);
+                    return roll * rotation;
+                }
+                return rotation;
+            }
+            else
+            {
+                return Quaternion.identity;
+            }
+        }
+
+        public Quaternion rotationOfDistance(float arcLength)
+        {
+            // Compute how many radians we moved.
+            float radians = arcLength * curvatureAmount + baseRadians;
+
+            // Now rotate the forward vector by that amount.
+            Vector3 axisOfRotation = Vector3.right;
+            float degrees = radians / Mathf.Deg2Rad;
+            Quaternion rotation = Quaternion.AngleAxis(-degrees, axisOfRotation);
+            return rotation;
+        }
+
+        public Vector3 getDirectionAlongPath(float t)
+        {
+            // TODO: compute as if moving along circle
+            return getLocalRotationAlongPath(t) * Vector3.forward;
+        }
+
+        #region GenGeometry
         /// <summary>
         /// Create a set of vertices arranged evenly spaced in a circle, with the specified radius,
         /// centered at centerPoint, and with the specified normal direction. The number of vertices
@@ -62,7 +156,6 @@ namespace Telescopes
                 float uvX = i / TelescopingStructure.verticesPerCircle;
                 // Make the vertices in clockwise order
                 Vector3 vert = new Vector3(Mathf.Cos(i * angleStep), -Mathf.Sin(i * angleStep));
-                Debug.Log("Vertex " + currentIndex + " = " + vert);
                 // Scale by radius.
                 vert *= radius;
                 // Rotate it to orbit the desired direction.
@@ -191,23 +284,21 @@ namespace Telescopes
             return triangles;
         }
 
-        public void GenerateGeometry(float length, float radius, float thickness,
-            Vector3 initCenter, Vector3 initDir,
-            float curvatureAmount, Vector3 curvatureDir)
+        public void GenerateGeometry(TelescopeParameters theParams)
         {
-            this.length = length;
-            this.radius = radius;
-            this.startPosition = initCenter;
-            this.startDirection = initDir;
-            this.curvatureAmount = curvatureAmount;
-            this.curvatureDirection = curvatureDir;
+            float thickness = theParams.thickness;
+            
+            this.length = theParams.length;
+            this.radius = theParams.radius;
+            this.curvatureAmount = theParams.curvature;
+            this.twistAngle = theParams.twistFromParent;
 
             // Reset the mesh.
             currentIndex = 0;
             mFilter.mesh.Clear();
 
-            CylinderMesh outerCyl = GenerateCylinder(length, radius, initCenter, initDir, curvatureAmount, curvatureDir);
-            CylinderMesh innerCyl = GenerateCylinder(length, radius - thickness, initCenter, initDir, curvatureAmount, curvatureDir);
+            CylinderMesh outerCyl = GenerateCylinder(length, radius, curvatureAmount);
+            CylinderMesh innerCyl = GenerateCylinder(length, radius - thickness, curvatureAmount);
 
             // Flatten vertex list
             List<IndexedVertex> outerVerts = flattenList(outerCyl.circleCuts);
@@ -250,40 +341,24 @@ namespace Telescopes
 
             mFilter.mesh.RecalculateBounds();
             mFilter.mesh.RecalculateNormals();
-
-            // TODO: temporary so we can see both sides easier
-            foreach (IndexTriangle tri in outerCyl.triangles)
-            {
-                tri.addBackFace(indicesList);
-            }
-            foreach (IndexTriangle tri in innerCyl.triangles)
-            {
-                tri.addFrontFace(indicesList);
-            }
-            mFilter.mesh.triangles = indicesList.ToArray();
         }
 
-        CylinderMesh GenerateCylinder(float length, float radius,
-            Vector3 initCenter, Vector3 initDir,
-            float curvatureAmount, Vector3 curvatureDir)
+        CylinderMesh GenerateCylinder(float length, float radius, float curvatureAmount)
         {
             // We basically need to sweep a circular cross-section along a circular path.
             List<List<IndexedVertex>> circles = new List<List<IndexedVertex>>();
 
-            float lengthStep = length / (TelescopingStructure.cutsPerCylinder - 1);
-            Vector3 centerPoint = initCenter;
-            Vector3 facingDirection = initDir;
+            float lengthStep = 1f / (TelescopingStructure.cutsPerCylinder - 1);
 
             // TODO: use curvatures
 
             // Generate vertices
             for (int i = 0; i < TelescopingStructure.cutsPerCylinder; i++)
             {
+                Vector3 centerPoint = getLocalLocationAlongPath(i * lengthStep);
+                Vector3 facingDirection = getDirectionAlongPath(i * lengthStep);
                 List<IndexedVertex> circle = GenerateCircle(i, centerPoint, facingDirection, radius);
                 circles.Add(circle);
-                // TODO: move along the circle instead of a straight line
-                centerPoint += lengthStep * facingDirection;
-                // TODO: update facing direction
                 // TODO: update radius?
             }
 
@@ -299,11 +374,42 @@ namespace Telescopes
 
             return cm;
         }
+        #endregion
+
+        public void extendToRatio(float targetT, float overTime)
+        {
+            interpTimespan = overTime;
+            oldRatio = extensionRatio;
+            targetRatio = targetT;
+            ratioInterpTime = 0;
+            currentlyInterp = true;
+        }
 
         // Update is called once per frame
         void Update()
         {
+            if (isRoot)
+            {
+                return;
+            }
 
+            extensionRatio = Mathf.Clamp01(extensionRatio);
+
+            if (currentlyInterp)
+            {
+                ratioInterpTime += Time.deltaTime;
+                extensionRatio = Mathf.SmoothStep(oldRatio, targetRatio, ratioInterpTime / interpTimespan);
+                if (ratioInterpTime > interpTimespan)
+                {
+                    extensionRatio = targetRatio;
+                    currentlyInterp = false;
+                }
+            }
+
+            // Set the shell's local translation from parent based on how extended it is.
+            transform.localPosition = getLocalLocationAlongPath(Mathf.Clamp01(extensionRatio * 2));
+            transform.localRotation = getLocalRotationAlongPath(Mathf.Clamp01(extensionRatio * 2),
+                Mathf.Clamp01(extensionRatio * 2 - 1));
         }
     }
 
