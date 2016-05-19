@@ -16,8 +16,10 @@ namespace Telescopes
         public float length, radius;
         public float curvatureAmount;
         public float twistAngle;
-        
-        public float baseRadians;
+
+        public Vector3 baseTranslation;
+        public Quaternion baseRotation;
+        // public float baseRadians;
 
         public bool isRoot = false;
         public float extensionRatio = 0;
@@ -64,31 +66,7 @@ namespace Telescopes
 
         public Vector3 translationOfDistance(float arcLength)
         {
-            if (curvatureAmount > 1e-6)
-            {
-                float curvatureRadius = 1f / curvatureAmount;
-
-                // Start at the bottom of the circle.
-                float baseAngle = 3 * Mathf.PI / 2 + baseRadians;
-
-                // Compute how many radians we moved.
-                float radians = arcLength * curvatureAmount;
-                float finalAngle = baseAngle + radians;
-
-                // Compute on the circle centered at (0, 0, 0),
-                // and then add (0, r, 0).
-                Vector3 center = Vector3.up * curvatureRadius;
-                Vector3 displacement = Vector3.zero;
-                displacement.z = Mathf.Cos(finalAngle) * curvatureRadius;
-                displacement.y = Mathf.Sin(finalAngle) * curvatureRadius;
-                displacement += center;
-                return displacement;
-            }
-            else
-            {
-                Vector3 displacement = (arcLength + baseRadians) * Vector3.forward;
-                return displacement;
-            }
+            return TelescopeUtils.translateAlongCircle(curvatureAmount, arcLength);
         }
 
         public Quaternion getLocalRotationAlongPath(float t, float twistT = 0)
@@ -100,7 +78,7 @@ namespace Telescopes
                 Quaternion rotation = rotationOfDistance(arcLength);
                 if (twistT > 0)
                 {
-                    Vector3 forwardAxis = rotation * Vector3.forward;
+                    Vector3 forwardAxis = rotation * baseRotation * Vector3.forward;
                     Quaternion roll = Quaternion.AngleAxis(-twistAngle * twistT, forwardAxis);
                     return roll * rotation;
                 }
@@ -114,14 +92,7 @@ namespace Telescopes
 
         public Quaternion rotationOfDistance(float arcLength)
         {
-            // Compute how many radians we moved.
-            float radians = arcLength * curvatureAmount + baseRadians;
-
-            // Now rotate the forward vector by that amount.
-            Vector3 axisOfRotation = Vector3.right;
-            float degrees = radians / Mathf.Deg2Rad;
-            Quaternion rotation = Quaternion.AngleAxis(-degrees, axisOfRotation);
-            return rotation;
+            return TelescopeUtils.rotateAlongCircle(curvatureAmount, arcLength);
         }
 
         public Vector3 getDirectionAlongPath(float t)
@@ -406,10 +377,13 @@ namespace Telescopes
                 }
             }
 
-            // Set the shell's local translation from parent based on how extended it is.
-            transform.localPosition = getLocalLocationAlongPath(Mathf.Clamp01(extensionRatio * 2));
-            transform.localRotation = getLocalRotationAlongPath(Mathf.Clamp01(extensionRatio * 2),
+            Vector3 localTranslation = getLocalLocationAlongPath(Mathf.Clamp01(extensionRatio * 2));
+            Quaternion localRotation = getLocalRotationAlongPath(Mathf.Clamp01(extensionRatio * 2),
                 Mathf.Clamp01(extensionRatio * 2 - 1));
+
+            // Set the shell's local translation from parent based on how extended it is.
+            transform.localPosition = baseRotation * localTranslation + baseTranslation;
+            transform.localRotation = localRotation * baseRotation;
         }
     }
 

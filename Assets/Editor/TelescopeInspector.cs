@@ -47,6 +47,7 @@ namespace Telescopes.UI
             TelescopingStructure ts = (TelescopingStructure)target;
 
             ts.material = (Material)EditorGUILayout.ObjectField("Material", ts.material, typeof(Material), false);
+            ts.fountainPrefab = (GameObject)EditorGUILayout.ObjectField("FountainPrefab", ts.fountainPrefab, typeof(GameObject), false);
 
             EditorGUILayout.Space();
 

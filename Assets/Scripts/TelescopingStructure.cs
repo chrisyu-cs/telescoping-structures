@@ -8,6 +8,8 @@ namespace Telescopes
     {
         public Material material;
 
+        public GameObject fountainPrefab;
+
         [Tooltip("The direction of the first shell.")]
         public Vector3 initialDirection = Vector3.up;
         [Tooltip("How many shells will be in the structure.")]
@@ -46,24 +48,46 @@ namespace Telescopes
 
             Debug.Log("Num params = " + parameters.Count);
 
+            // Compute the absolute parameter values from the list of diffs we are given.
+            List<TelescopeParameters> concreteParams = new List<TelescopeParameters>();
+            TelescopeParameters theParams = parameters[0];
+            concreteParams.Add(new TelescopeParameters(parameters[0]));
+            for (int i = 1; i < numShells; i++)
+            {
+                theParams = theParams + parameters[i];
+                theParams.length -= 0; // wallThickness;
+                theParams.radius -= wallThickness;
+                concreteParams.Add(theParams);
+            }
+
+            // Make a pass in reverse that grows each parent so that it is large enough
+            // to contain its child.
+            for (int i = numShells - 1; i > 0; i--)
+            {
+                TelescopeUtils.growParentToChild(concreteParams[i - 1], concreteParams[i]);
+            }
+
             // Make the shell geometry
             TelescopingShell shell = rootShellObj.AddComponent<TelescopingShell>();
-            shell.GenerateGeometry(parameters[0]);
+            shell.GenerateGeometry(concreteParams[0]);
             shell.setMaterial(material);
 
             // Shells don't know anything about their position/rotation,
             // so we set that here.
             Quaternion rotation = Quaternion.FromToRotation(Vector3.forward, initialDirection);
-            Quaternion roll = Quaternion.AngleAxis(parameters[0].twistFromParent, initialDirection);
+            Quaternion roll = Quaternion.AngleAxis(concreteParams[0].twistFromParent, initialDirection);
             rootShellObj.transform.rotation = roll * rotation;
-            shell.baseRadians = 0;
+            // shell.baseRadians = 0;
+            shell.baseTranslation = Vector3.zero;
+            shell.baseRotation = Quaternion.identity;
 
             shells.Add(shell);
             shell.isRoot = true;
             
+            // Make all of the child shells here.
             GameObject previousShellObj = rootShellObj;
-            TelescopeParameters currentParams = parameters[0];
-
+            TelescopeParameters previousParams = concreteParams[0];
+            TelescopeParameters currentParams = concreteParams[0];
             for (int i = 1; i < numShells; i++)
             {
                 // Make the new shell, and set the previous shell as its parent
@@ -72,20 +96,28 @@ namespace Telescopes
                 shellObj.name = "shell" + i;
                 previousShellObj = shellObj;
 
+                // Get the computed parameters for this and the previous shell.
+                currentParams = concreteParams[i];
+                previousParams = concreteParams[i - 1];
+
                 // Make the geometry, etc.
                 TelescopingShell newShell = shellObj.AddComponent<TelescopingShell>();
-                currentParams = currentParams + parameters[i];
-                currentParams.length -= 2 * wallThickness;
-                currentParams.radius -= wallThickness;
                 newShell.GenerateGeometry(currentParams);
                 newShell.setMaterial(material);
 
                 // Set the shell's rest transformation relative to its parent.
                 // When the shell's current extension ratio is 0, this is where
                 // it is located relative to its parent.
-                newShell.baseRadians = newShell.radiansOfLength(wallThickness);
-
+                // newShell.baseRadians = newShell.radiansOfLength(wallThickness);
+                newShell.baseTranslation = TelescopeUtils.childBasePosition(previousParams, currentParams);
+                newShell.baseRotation = TelescopeUtils.childBaseRotation(previousParams, currentParams);
                 shells.Add(newShell);
+            }
+
+            if (fountainPrefab)
+            {
+                GameObject fountain = Instantiate<GameObject>(fountainPrefab);
+                fountain.transform.parent = previousShellObj.transform;
             }
         }
 
@@ -138,6 +170,15 @@ namespace Telescopes
         {
             TelescopeParameters sum = new TelescopeParameters(t1, t2);
             return sum;
+        }
+
+        public TelescopeParameters(TelescopeParameters toCopy)
+        {
+            length = toCopy.length;
+            radius = toCopy.radius;
+            thickness = toCopy.thickness;
+            curvature = toCopy.curvature;
+            twistFromParent = toCopy.twistFromParent;
         }
 
         public TelescopeParameters(TelescopeParameters baseParams, TelescopeParameters diff)
