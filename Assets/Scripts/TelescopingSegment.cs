@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace Telescopes
 {
     [System.Serializable]
-    public class TelescopingStructure : MonoBehaviour
+    public class TelescopingSegment : MonoBehaviour
     {
         public Material material;
 
@@ -31,20 +31,112 @@ namespace Telescopes
         public static int verticesPerCircle = 40;
 
         public List<TelescopeParameters> parameters;
+        public List<TelescopeParameters> concreteParameters;
 
         private List<TelescopingShell> shells;
+
+        public TelescopeParameters DefaultChildDiff
+        {
+            get
+            {
+                TelescopeParameters tp = new TelescopeParameters(0, -wallThickness, wallThickness, 0, 0);
+                return tp;
+            }
+        }
+
+        public TelescopingShell addChildShell(TelescopingShell parent,
+            TelescopeParameters parentParams, TelescopeParameters childParams)
+        {
+            int i = shells.Count;
+            // Make the new shell, and set the previous shell as its parent
+            GameObject shellObj = new GameObject();
+            shellObj.transform.parent = parent.transform;
+            shellObj.name = "shell" + i;
+
+            // Make the geometry, etc.
+            TelescopingShell newShell = shellObj.AddComponent<TelescopingShell>();
+            newShell.GenerateGeometry(childParams);
+            newShell.setMaterial(material);
+
+            // Set the shell's rest transformation relative to its parent.
+            // When the shell's current extension ratio is 0, this is where
+            // it is located relative to its parent.
+            // newShell.baseRadians = newShell.radiansOfLength(wallThickness);
+            newShell.baseTranslation = TelescopeUtils.childBasePosition(parentParams, childParams);
+            newShell.baseRotation = TelescopeUtils.childBaseRotation(parentParams, childParams);
+            shells.Add(newShell);
+
+            CapsuleCollider cc = shellObj.AddComponent<CapsuleCollider>();
+            cc.direction = 2;
+            shellObj.layer = 8;
+            Rigidbody rb = shellObj.AddComponent<Rigidbody>();
+            rb.isKinematic = true;
+
+            newShell.containingSegment = this;
+
+            return newShell;
+        }
+
+        public void MakeAllShells(List<TelescopeParameters> paramList)
+        {
+            // Create an object for the first shell
+            GameObject rootShellObj = new GameObject();
+            rootShellObj.name = "shell0";
+            rootShellObj.transform.parent = this.transform;
+            rootShellObj.transform.localPosition = Vector3.zero;
+
+            // Make the shell geometry
+            TelescopingShell shell = rootShellObj.AddComponent<TelescopingShell>();
+            shell.GenerateGeometry(paramList[0]);
+            shell.setMaterial(material);
+
+            // Shells don't know anything about their position/rotation,
+            // so we set that here.
+            Quaternion rotation = Quaternion.FromToRotation(Vector3.forward, initialDirection);
+            Quaternion roll = Quaternion.AngleAxis(paramList[0].twistFromParent, initialDirection);
+            rootShellObj.transform.rotation = roll * rotation;
+            CapsuleCollider cc = rootShellObj.AddComponent<CapsuleCollider>();
+            cc.direction = 2;
+            rootShellObj.layer = 8;
+            Rigidbody rb = rootShellObj.AddComponent<Rigidbody>();
+            rb.isKinematic = true;
+
+            shell.containingSegment = this;
+
+            // shell.baseRadians = 0;
+            shell.baseTranslation = Vector3.zero;
+            shell.baseRotation = Quaternion.identity;
+
+            shells.Add(shell);
+            shell.isRoot = true;
+
+            // Make all of the child shells here.
+            TelescopingShell prevShell = shell;
+            TelescopeParameters previousParams = paramList[0];
+            TelescopeParameters currentParams = paramList[0];
+            for (int i = 1; i < numShells; i++)
+            {
+                // Get the computed parameters for this and the previous shell.
+                currentParams = paramList[i];
+                previousParams = paramList[i - 1];
+
+                // Add it.
+                prevShell = addChildShell(prevShell, previousParams, currentParams);
+            }
+
+            /*
+            if (fountainPrefab)
+            {
+                GameObject fountain = Instantiate<GameObject>(fountainPrefab);
+                fountain.transform.parent = prevShell.transform;
+            }*/
+        }
 
         // Use this for initialization
         void Start()
         {
             shells = new List<TelescopingShell>();
             initialDirection.Normalize();
-
-            // Create an object for the first shell
-            GameObject rootShellObj = new GameObject();
-            rootShellObj.name = "shell0";
-            rootShellObj.transform.parent = this.transform;
-            rootShellObj.transform.localPosition = Vector3.zero;
 
             Debug.Log("Num params = " + parameters.Count);
 
@@ -67,58 +159,9 @@ namespace Telescopes
                 TelescopeUtils.growParentToChild(concreteParams[i - 1], concreteParams[i]);
             }
 
-            // Make the shell geometry
-            TelescopingShell shell = rootShellObj.AddComponent<TelescopingShell>();
-            shell.GenerateGeometry(concreteParams[0]);
-            shell.setMaterial(material);
-
-            // Shells don't know anything about their position/rotation,
-            // so we set that here.
-            Quaternion rotation = Quaternion.FromToRotation(Vector3.forward, initialDirection);
-            Quaternion roll = Quaternion.AngleAxis(concreteParams[0].twistFromParent, initialDirection);
-            rootShellObj.transform.rotation = roll * rotation;
-            // shell.baseRadians = 0;
-            shell.baseTranslation = Vector3.zero;
-            shell.baseRotation = Quaternion.identity;
-
-            shells.Add(shell);
-            shell.isRoot = true;
-            
-            // Make all of the child shells here.
-            GameObject previousShellObj = rootShellObj;
-            TelescopeParameters previousParams = concreteParams[0];
-            TelescopeParameters currentParams = concreteParams[0];
-            for (int i = 1; i < numShells; i++)
-            {
-                // Make the new shell, and set the previous shell as its parent
-                GameObject shellObj = new GameObject();
-                shellObj.transform.parent = previousShellObj.transform;
-                shellObj.name = "shell" + i;
-                previousShellObj = shellObj;
-
-                // Get the computed parameters for this and the previous shell.
-                currentParams = concreteParams[i];
-                previousParams = concreteParams[i - 1];
-
-                // Make the geometry, etc.
-                TelescopingShell newShell = shellObj.AddComponent<TelescopingShell>();
-                newShell.GenerateGeometry(currentParams);
-                newShell.setMaterial(material);
-
-                // Set the shell's rest transformation relative to its parent.
-                // When the shell's current extension ratio is 0, this is where
-                // it is located relative to its parent.
-                // newShell.baseRadians = newShell.radiansOfLength(wallThickness);
-                newShell.baseTranslation = TelescopeUtils.childBasePosition(previousParams, currentParams);
-                newShell.baseRotation = TelescopeUtils.childBaseRotation(previousParams, currentParams);
-                shells.Add(newShell);
-            }
-
-            if (fountainPrefab)
-            {
-                GameObject fountain = Instantiate<GameObject>(fountainPrefab);
-                fountain.transform.parent = previousShellObj.transform;
-            }
+            // Construct all of the shells from this parameter list.
+            MakeAllShells(concreteParams);
+            concreteParameters = concreteParams;
         }
 
 

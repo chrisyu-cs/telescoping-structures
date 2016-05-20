@@ -22,8 +22,7 @@ namespace Telescopes
             rb = GetComponent<Rigidbody>();
         }
 
-        // Update is called once per frame
-        void Update()
+        void ProcessMove()
         {
             if (Input.GetKeyDown("f"))
             {
@@ -34,12 +33,10 @@ namespace Telescopes
             float right = Input.GetAxis("Horizontal");
             float rmb = Input.GetAxis("Jump");
 
-            
-
             transform.position += up * transform.forward * Time.deltaTime * translateSpeed;
             transform.position += right * transform.right * Time.deltaTime * translateSpeed;
             transform.position += rmb * transform.up * Time.deltaTime * translateSpeed;
-            
+
             if (!locked && Input.GetAxis("Fire2") > 0.5f)
             {
                 float mouseX = Input.GetAxis("Mouse X");
@@ -51,6 +48,14 @@ namespace Telescopes
 
             transform.rotation = Quaternion.Euler(phi, theta, 0);
         }
-    }
 
+        // Update is called once per frame
+        void Update()
+        {
+            if (DesignerController.instance.currentMode == DesignerMode.View)
+            {
+                ProcessMove();
+            }
+        }
+    }
 }

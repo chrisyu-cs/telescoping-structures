@@ -13,7 +13,7 @@ namespace Telescopes
         private MeshRenderer mRenderer;
         private int currentIndex;
 
-        public float length, radius;
+        public float length, radius, thickness;
         public float curvatureAmount;
         public float twistAngle;
 
@@ -30,6 +30,8 @@ namespace Telescopes
         private float targetRatio = 0;
         private float ratioInterpTime = 0;
 
+        public TelescopingSegment containingSegment;
+
         // Use this for initialization
         void Awake()
         {
@@ -44,6 +46,17 @@ namespace Telescopes
             {
                 mRenderer = gameObject.AddComponent<MeshRenderer>();
             }
+        }
+
+        public bool IsTerminal()
+        {
+            return (transform.childCount == 0);
+        }
+
+        public TelescopeParameters getParameters()
+        {
+            TelescopeParameters tp = new TelescopeParameters(length, radius, thickness, curvatureAmount, twistAngle);
+            return tp;
         }
 
         public void setMaterial(Material m)
@@ -113,18 +126,18 @@ namespace Telescopes
         /// <returns></returns>
         List<IndexedVertex> GenerateCircle(int circNum, Vector3 centerPoint, Vector3 direction, float radius)
         {
-            float angleStep = (2 * Mathf.PI) / TelescopingStructure.verticesPerCircle;
+            float angleStep = (2 * Mathf.PI) / TelescopingSegment.verticesPerCircle;
             List<IndexedVertex> verts = new List<IndexedVertex>();
 
-            float uvY = (float)circNum / TelescopingStructure.cutsPerCylinder;
+            float uvY = (float)circNum / TelescopingSegment.cutsPerCylinder;
 
             // First create points in a circle in the XY plane, facing the forward direction.
             // Then apply the rotation that will rotate the normal onto the desired direction.
             // Finally, offset it in space to the desired location.
             Quaternion circleRotation = Quaternion.FromToRotation(Vector3.forward, direction);
-            for (int i = 0; i < TelescopingStructure.verticesPerCircle; i++)
+            for (int i = 0; i < TelescopingSegment.verticesPerCircle; i++)
             {
-                float uvX = i / TelescopingStructure.verticesPerCircle;
+                float uvX = i / TelescopingSegment.verticesPerCircle;
                 // Make the vertices in clockwise order
                 Vector3 vert = new Vector3(Mathf.Cos(i * angleStep), -Mathf.Sin(i * angleStep));
                 // Scale by radius.
@@ -257,8 +270,7 @@ namespace Telescopes
 
         public void GenerateGeometry(TelescopeParameters theParams)
         {
-            float thickness = theParams.thickness;
-            
+            this.thickness = theParams.thickness;
             this.length = theParams.length;
             this.radius = theParams.radius;
             this.curvatureAmount = theParams.curvature;
@@ -319,12 +331,12 @@ namespace Telescopes
             // We basically need to sweep a circular cross-section along a circular path.
             List<List<IndexedVertex>> circles = new List<List<IndexedVertex>>();
 
-            float lengthStep = 1f / (TelescopingStructure.cutsPerCylinder - 1);
+            float lengthStep = 1f / (TelescopingSegment.cutsPerCylinder - 1);
 
             // TODO: use curvatures
 
             // Generate vertices
-            for (int i = 0; i < TelescopingStructure.cutsPerCylinder; i++)
+            for (int i = 0; i < TelescopingSegment.cutsPerCylinder; i++)
             {
                 Vector3 centerPoint = getLocalLocationAlongPath(i * lengthStep);
                 Vector3 facingDirection = getDirectionAlongPath(i * lengthStep);
@@ -335,7 +347,7 @@ namespace Telescopes
 
             // Now generate faces
             List<IndexTriangle> allIndices = new List<IndexTriangle>();
-            for (int i = 0; i < TelescopingStructure.cutsPerCylinder - 1; i++)
+            for (int i = 0; i < TelescopingSegment.cutsPerCylinder - 1; i++)
             {
                 List<IndexTriangle> tris = StitchCircles(circles[i], circles[i + 1]);
                 allIndices.AddRange(tris);
