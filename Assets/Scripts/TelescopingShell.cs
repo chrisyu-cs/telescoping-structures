@@ -22,7 +22,7 @@ namespace Telescopes
         // public float baseRadians;
 
         public bool isRoot = false;
-        public float extensionRatio = 0;
+        public float extensionRatio = 1;
 
         private float oldRatio = 0;
         private float interpTimespan = 0;
@@ -99,7 +99,9 @@ namespace Telescopes
             }
             else
             {
-                return Quaternion.identity;
+                Vector3 forwardAxis = baseRotation * Vector3.forward;
+                Quaternion roll = Quaternion.AngleAxis(-twistAngle * twistT, forwardAxis);
+                return roll;
             }
         }
 

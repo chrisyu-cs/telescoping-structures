@@ -13,7 +13,13 @@ namespace Telescopes
         [Tooltip("The direction of the first shell.")]
         public Vector3 initialDirection = Vector3.up;
         [Tooltip("How many shells will be in the structure.")]
-        public int numShells = 4;
+        public int initNumShells = 4;
+
+        public int NumShells
+        {
+            get { return shells.Count; }
+        }
+
         [Tooltip("The length of the first shell.")]
         public float initialLength = 1;
         [Tooltip("The radius of the first shell.")]
@@ -34,6 +40,7 @@ namespace Telescopes
         public List<TelescopeParameters> concreteParameters;
 
         private List<TelescopingShell> shells;
+        private GameObject telescopeRootShell;
 
         public TelescopeParameters DefaultChildDiff
         {
@@ -77,13 +84,37 @@ namespace Telescopes
             return newShell;
         }
 
+        void DeleteTelescope()
+        {
+            if (telescopeRootShell)
+            {
+                shells.Clear();
+                Destroy(telescopeRootShell);
+            }
+        }
+
+        public List<TelescopeParameters> getParamList()
+        {
+            List<TelescopeParameters> allParams = new List<TelescopeParameters>();
+            foreach (TelescopingShell ts in shells)
+            {
+                allParams.Add(ts.getParameters());
+            }
+            
+            return allParams;
+        }
+
         public void MakeAllShells(List<TelescopeParameters> paramList)
         {
+            DeleteTelescope();
+            
             // Create an object for the first shell
             GameObject rootShellObj = new GameObject();
             rootShellObj.name = "shell0";
             rootShellObj.transform.parent = this.transform;
             rootShellObj.transform.localPosition = Vector3.zero;
+
+            telescopeRootShell = rootShellObj;
 
             // Make the shell geometry
             TelescopingShell shell = rootShellObj.AddComponent<TelescopingShell>();
@@ -114,7 +145,7 @@ namespace Telescopes
             TelescopingShell prevShell = shell;
             TelescopeParameters previousParams = paramList[0];
             TelescopeParameters currentParams = paramList[0];
-            for (int i = 1; i < numShells; i++)
+            for (int i = 1; i < paramList.Count; i++)
             {
                 // Get the computed parameters for this and the previous shell.
                 currentParams = paramList[i];
@@ -144,7 +175,7 @@ namespace Telescopes
             List<TelescopeParameters> concreteParams = new List<TelescopeParameters>();
             TelescopeParameters theParams = parameters[0];
             concreteParams.Add(new TelescopeParameters(parameters[0]));
-            for (int i = 1; i < numShells; i++)
+            for (int i = 1; i < initNumShells; i++)
             {
                 theParams = theParams + parameters[i];
                 theParams.length -= 0; // wallThickness;
@@ -152,36 +183,89 @@ namespace Telescopes
                 concreteParams.Add(theParams);
             }
 
-            // Make a pass in reverse that grows each parent so that it is large enough
-            // to contain its child.
-            for (int i = numShells - 1; i > 0; i--)
-            {
-                TelescopeUtils.growParentToChild(concreteParams[i - 1], concreteParams[i]);
-            }
+            // Make sure that all the shells fit inside each other.
+            TelescopeUtils.growChainToFit(concreteParams);
 
             // Construct all of the shells from this parameter list.
             MakeAllShells(concreteParams);
             concreteParameters = concreteParams;
         }
 
+        private float extensionTime = 0;
+        private float extensionTimespan = 0;
+        private float oldExtension = 0;
+        private float currentExtension = 0;
+        private float targetExtension = 0;
+        private bool currentlyInterp = false;
+
+        void ExtendTo(float t, float overTime)
+        {
+            extensionTime = 0;
+            extensionTimespan = overTime;
+            oldExtension = currentExtension;
+            targetExtension = t;
+            currentlyInterp = true;
+        }
+
+        void SetShellExtensions(float t)
+        {
+            float tRemaining = t;
+            float tStep = 1f / (shells.Count - 1);
+            for (int i = 1; i < shells.Count; i++)
+            {
+                TelescopingShell ts = shells[i];
+                if (tRemaining > tStep)
+                {
+                    ts.extensionRatio = 1;
+                    tRemaining -= tStep;
+                }
+                else if (tRemaining > 0)
+                {
+                    float tNormalized = tRemaining / tStep;
+                    ts.extensionRatio = tNormalized;
+                    tRemaining = 0;
+                }
+                else
+                {
+                    ts.extensionRatio = 0;
+                }
+            }
+        }
 
         // Update is called once per frame
         void Update()
         {
             if (Input.GetKeyDown("e"))
             {
+                ExtendTo(1, Mathf.Log(shells.Count));
+                /*
                 foreach (TelescopingShell ts in shells)
                 {
                     ts.extendToRatio(1, 2f);
-                }
+                }*/
             }
             else if (Input.GetKeyDown("q"))
             {
+                ExtendTo(0, Mathf.Log(shells.Count));
+                /*
                 foreach (TelescopingShell ts in shells)
                 {
                     ts.extendToRatio(0, 2f);
+                }*/
+            }
+
+            if (currentlyInterp)
+            {
+                extensionTime += Time.deltaTime;
+                currentExtension = Mathf.Lerp(oldExtension, targetExtension, extensionTime / extensionTimespan);
+                if (extensionTime >= extensionTimespan)
+                {
+                    currentlyInterp = false;
+                    currentExtension = targetExtension;
                 }
             }
+            SetShellExtensions(currentExtension);
+
             // Live-update the orientation for better testing
             /*
             initialDirection.Normalize();
@@ -199,6 +283,12 @@ namespace Telescopes
         public float thickness;
         public float curvature;
         public float twistFromParent;
+
+        public override string ToString()
+        {
+            return "Length " + length + ", radius " + radius + ", thickness " + thickness
+                + ", curvature " + curvature + ", twist " + twistFromParent; 
+        }
 
         public TelescopeParameters(float l, float r, float w, float c, float t)
         {

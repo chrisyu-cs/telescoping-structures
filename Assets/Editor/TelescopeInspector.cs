@@ -17,12 +17,12 @@ namespace Telescopes.UI
             {
                 ts.parameters = new List<TelescopeParameters>();
 
-                while (ts.parameters.Count > ts.numShells)
+                while (ts.parameters.Count > ts.initNumShells)
                 {
                     ts.parameters.RemoveAt(ts.parameters.Count - 1);
                     foldouts.RemoveAt(ts.parameters.Count - 1);
                 }
-                while (ts.parameters.Count < ts.numShells)
+                while (ts.parameters.Count < ts.initNumShells)
                 {
                     if (ts.parameters.Count == 0)
                         ts.parameters.Add(new TelescopeParameters(1, 0.5f, ts.wallThickness, 0, 0));
@@ -52,17 +52,17 @@ namespace Telescopes.UI
             EditorGUILayout.Space();
 
             // Parameters for the entire telescope
-            ts.numShells = EditorGUILayout.IntField("Number of Shells", ts.numShells);
+            ts.initNumShells = EditorGUILayout.IntField("Number of Shells", ts.initNumShells);
             ts.initialDirection = EditorGUILayout.Vector3Field("Initial Direction", ts.initialDirection);
             ts.wallThickness = EditorGUILayout.FloatField("Wall Thickness", ts.wallThickness);
 
             // Keep parameter list synced with shell count
-            while (ts.parameters.Count > ts.numShells)
+            while (ts.parameters.Count > ts.initNumShells)
             {
                 ts.parameters.RemoveAt(ts.parameters.Count - 1);
                 foldouts.RemoveAt(ts.parameters.Count - 1);
             }
-            while (ts.parameters.Count < ts.numShells)
+            while (ts.parameters.Count < ts.initNumShells)
             {
                 if (ts.parameters.Count == 0)
                     ts.parameters.Add(new TelescopeParameters(1, 0.5f, ts.wallThickness, 0, 0));
