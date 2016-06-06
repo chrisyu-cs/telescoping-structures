@@ -1,12 +1,17 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
+using System;
 
 namespace Telescopes
 {
     [System.Serializable]
-    public class TelescopingSegment : MonoBehaviour
+    public class TelescopingSegment : TelescopeElement
     {
         public Material material;
+
+        public bool rootSegment = true;
+        public bool ReversedOption;
+        private bool Reversed;
 
         public GameObject fountainPrefab;
 
@@ -30,7 +35,7 @@ namespace Telescopes
         public float curvatureRotation = 0f;
 
         [Tooltip("How thick the walls of the geometry are to be.")]
-        public float wallThickness = 0.1f;
+        public float wallThickness = Constants.DEFAULT_WALL_THICKNESS;
 
         [Tooltip("The resolution of the mesh -- how many loops each cylinder should have.")]
         public static int cutsPerCylinder = 10;
@@ -42,6 +47,10 @@ namespace Telescopes
         private List<TelescopingShell> shells;
         private GameObject telescopeRootShell;
 
+        public TelescopeElement parent;
+        public int parentElementNumber;
+        public Vector3 offsetFromParent;
+
         public TelescopeParameters DefaultChildDiff
         {
             get
@@ -49,6 +58,16 @@ namespace Telescopes
                 TelescopeParameters tp = new TelescopeParameters(0, -wallThickness, wallThickness, 0, 0);
                 return tp;
             }
+        }
+
+        public override int numChildElements()
+        {
+            return shells.Count;
+        }
+
+        public override TelescopeElement getChildElement(int i)
+        {
+            return shells[i];
         }
 
         public TelescopingShell addChildShell(TelescopingShell parent,
@@ -104,7 +123,17 @@ namespace Telescopes
             return allParams;
         }
 
-        public void MakeAllShells(List<TelescopeParameters> paramList)
+        public override Vector3 getAttachmentLocation(float t)
+        {
+            return Vector3.zero;
+        }
+
+        public override Quaternion getAttachmentRotation(float t)
+        {
+            return Quaternion.identity;
+        }
+
+        public void MakeAllShells(List<TelescopeParameters> paramList, bool reversed = false)
         {
             DeleteTelescope();
             
@@ -145,6 +174,7 @@ namespace Telescopes
             TelescopingShell prevShell = shell;
             TelescopeParameters previousParams = paramList[0];
             TelescopeParameters currentParams = paramList[0];
+
             for (int i = 1; i < paramList.Count; i++)
             {
                 // Get the computed parameters for this and the previous shell.
@@ -155,31 +185,31 @@ namespace Telescopes
                 prevShell = addChildShell(prevShell, previousParams, currentParams);
             }
 
-            /*
+            
             if (fountainPrefab)
             {
                 GameObject fountain = Instantiate<GameObject>(fountainPrefab);
                 fountain.transform.parent = prevShell.transform;
-            }*/
+            }
         }
 
-        // Use this for initialization
-        void Start()
+        public void MakeShellsFromDiffs(List<TelescopeParameters> diffs)
         {
+            initNumShells = diffs.Count;
+            parameters = diffs;
             shells = new List<TelescopingShell>();
             initialDirection.Normalize();
 
-            Debug.Log("Num params = " + parameters.Count);
-
             // Compute the absolute parameter values from the list of diffs we are given.
             List<TelescopeParameters> concreteParams = new List<TelescopeParameters>();
-            TelescopeParameters theParams = parameters[0];
-            concreteParams.Add(new TelescopeParameters(parameters[0]));
+            TelescopeParameters theParams = diffs[0];
+            concreteParams.Add(new TelescopeParameters(diffs[0]));
             for (int i = 1; i < initNumShells; i++)
             {
-                theParams = theParams + parameters[i];
+                if (diffs[i].radius > -wallThickness) diffs[i].radius = -wallThickness;
+                theParams = theParams + diffs[i];
                 theParams.length -= 0; // wallThickness;
-                theParams.radius -= wallThickness;
+                //theParams.radius -= wallThickness;
                 concreteParams.Add(theParams);
             }
 
@@ -189,6 +219,27 @@ namespace Telescopes
             // Construct all of the shells from this parameter list.
             MakeAllShells(concreteParams);
             concreteParameters = concreteParams;
+            currentExtension = 1;
+            SetShellExtensions(currentExtension);
+        }
+
+        // Use this for initialization
+        void Awake()
+        {
+            if (parameters != null)
+            {
+                MakeShellsFromDiffs(parameters);
+            }
+        }
+
+        void Start()
+        {
+            if (parent)
+            {
+                TelescopeElement element = parent.getChildElement(parentElementNumber);
+                this.transform.parent = element.transform;
+                this.transform.position = element.transform.position + offsetFromParent;
+            }
         }
 
         private float extensionTime = 0;
@@ -197,6 +248,11 @@ namespace Telescopes
         private float currentExtension = 0;
         private float targetExtension = 0;
         private bool currentlyInterp = false;
+
+        public void ExtendTo(float t)
+        {
+            ExtendTo(t, Mathf.Log(shells.Count));
+        }
 
         void ExtendTo(float t, float overTime)
         {
@@ -207,7 +263,7 @@ namespace Telescopes
             currentlyInterp = true;
         }
 
-        void SetShellExtensions(float t)
+        public void SetShellExtensions(float t)
         {
             float tRemaining = t;
             float tStep = 1f / (shells.Count - 1);
@@ -232,26 +288,56 @@ namespace Telescopes
             }
         }
 
+        public void ReverseTelescope()
+        {
+            Debug.Log("Reverse");
+            // Extend the shell fully so that we have the correct world positions.
+            SetShellExtensions(1);
+            for (int i = 1; i < shells.Count; i++)
+            {
+                shells[i].SetTransform();
+            }
+
+            // Unparent all shells.
+            for (int i = shells.Count - 1; i >= 0; i--)
+            {
+                shells[i].transform.parent = transform;
+            }
+
+            // Reverse the parent order.
+            for (int i = shells.Count - 2; i >= 0; i--)
+            {
+                shells[i].transform.parent = shells[i + 1].transform;
+            }
+
+            foreach (var shell in shells)
+            {
+                shell.Reversed = !shell.Reversed;
+            }
+
+            shells.Reverse();
+            SetShellExtensions(currentExtension);
+        }
+
         // Update is called once per frame
         void Update()
         {
-            if (Input.GetKeyDown("e"))
+            if (ReversedOption != Reversed)
             {
-                ExtendTo(1, Mathf.Log(shells.Count));
-                /*
-                foreach (TelescopingShell ts in shells)
-                {
-                    ts.extendToRatio(1, 2f);
-                }*/
+                ReverseTelescope();
+                Reversed = ReversedOption;
             }
-            else if (Input.GetKeyDown("q"))
+
+            if (rootSegment)
             {
-                ExtendTo(0, Mathf.Log(shells.Count));
-                /*
-                foreach (TelescopingShell ts in shells)
+                if (Input.GetKeyDown("e"))
                 {
-                    ts.extendToRatio(0, 2f);
-                }*/
+                    ExtendTo(1, Mathf.Log(shells.Count));
+                }
+                else if (Input.GetKeyDown("q"))
+                {
+                    ExtendTo(0, Mathf.Log(shells.Count));
+                } 
             }
 
             if (currentlyInterp)
@@ -263,8 +349,13 @@ namespace Telescopes
                     currentlyInterp = false;
                     currentExtension = targetExtension;
                 }
+                SetShellExtensions(currentExtension);
             }
-            SetShellExtensions(currentExtension);
+            
+            for (int i = 1; i < shells.Count; i++)
+            {
+                shells[i].SetTransform();
+            }
 
             // Live-update the orientation for better testing
             /*

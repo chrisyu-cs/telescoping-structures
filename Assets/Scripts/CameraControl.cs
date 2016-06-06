@@ -52,10 +52,7 @@ namespace Telescopes
         // Update is called once per frame
         void Update()
         {
-            if (DesignerController.instance.currentMode == DesignerMode.View)
-            {
-                ProcessMove();
-            }
+            ProcessMove();
         }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
+using System;
 
 namespace Telescopes
 {
@@ -7,7 +8,7 @@ namespace Telescopes
     /// A class that represents a telescoping shell.
     /// </summary>
     [RequireComponent(typeof(MeshFilter))]
-    public class TelescopingShell : MonoBehaviour
+    public class TelescopingShell : TelescopeElement
     {
         private MeshFilter mFilter;
         private MeshRenderer mRenderer;
@@ -17,12 +18,14 @@ namespace Telescopes
         public float curvatureAmount;
         public float twistAngle;
 
+        public bool Reversed;
+
         public Vector3 baseTranslation;
         public Quaternion baseRotation;
         // public float baseRadians;
 
         public bool isRoot = false;
-        public float extensionRatio = 1;
+        public float extensionRatio = 0;
 
         private float oldRatio = 0;
         private float interpTimespan = 0;
@@ -53,6 +56,16 @@ namespace Telescopes
             return (transform.childCount == 0);
         }
 
+        public override int numChildElements()
+        {
+            return 1;
+        }
+
+        public override TelescopeElement getChildElement(int i)
+        {
+            return this;
+        }
+
         public TelescopeParameters getParameters()
         {
             TelescopeParameters tp = new TelescopeParameters(length, radius, thickness, curvatureAmount, twistAngle);
@@ -71,6 +84,21 @@ namespace Telescopes
             else return arcLength;
         }
 
+        public override Vector3 getAttachmentLocation(float t)
+        {
+            return getLocalLocationAlongPath(t);
+        }
+
+        public override Quaternion getAttachmentRotation(float t)
+        {
+            return getLocalRotationAlongPath(t);
+        }
+
+        public Vector3 getInvLocationAlongPath(float t)
+        {
+            return getLocalLocationAlongPath(-t);
+        }
+
         public Vector3 getLocalLocationAlongPath(float t)
         {
             float arcLength = t * length;
@@ -82,26 +110,29 @@ namespace Telescopes
             return TelescopeUtils.translateAlongCircle(curvatureAmount, arcLength);
         }
 
-        public Quaternion getLocalRotationAlongPath(float t, float twistT = 0)
+        public Quaternion getLocalRotationAlongPath(float t)
         {
             if (curvatureAmount > 1e-6)
             {
                 // Compute how many radians along the circle we moved.
                 float arcLength = t * length;
                 Quaternion rotation = rotationOfDistance(arcLength);
+                /*
                 if (twistT > 0)
                 {
                     Vector3 forwardAxis = rotation * baseRotation * Vector3.forward;
                     Quaternion roll = Quaternion.AngleAxis(-twistAngle * twistT, forwardAxis);
                     return roll * rotation;
-                }
+                } */
                 return rotation;
             }
             else
             {
+                return Quaternion.identity;
+                /*
                 Vector3 forwardAxis = baseRotation * Vector3.forward;
                 Quaternion roll = Quaternion.AngleAxis(-twistAngle * twistT, forwardAxis);
-                return roll;
+                return roll;*/
             }
         }
 
@@ -295,7 +326,7 @@ namespace Telescopes
 
             // Sort the vertices just to be safe
             outerVerts.Sort();
-            
+
             // Make vertex buffer
             List<Vector3> vecs = outerVerts.ConvertAll(new System.Converter<IndexedVertex, Vector3>(IndexedVertex.toVector3));
             Vector3[] vertices = vecs.ToArray();
@@ -370,34 +401,46 @@ namespace Telescopes
             currentlyInterp = true;
         }
 
-        // Update is called once per frame
-        void Update()
+        public void SetTransform()
         {
-            if (isRoot)
+            float extendT = Mathf.Clamp01(extensionRatio * 2);
+            float twistT = Mathf.Clamp01(extensionRatio * 2 - 1);
+
+            if (!Reversed)
             {
-                return;
+                Vector3 localTranslation = getLocalLocationAlongPath(extendT);
+                Quaternion localRotation = getLocalRotationAlongPath(extendT);
+                
+                // Add twist angle.
+                Vector3 forwardAxis = localRotation * baseRotation * Vector3.forward;
+                Quaternion roll = Quaternion.AngleAxis(-twistAngle * twistT, forwardAxis);
+                localRotation = roll * localRotation;
+
+                // Set the shell's local translation from parent based on how extended it is.
+                transform.localPosition = baseRotation * localTranslation + baseTranslation;
+                transform.localRotation = localRotation * baseRotation;
+
             }
-
-            extensionRatio = Mathf.Clamp01(extensionRatio);
-
-            if (currentlyInterp)
+            else
             {
-                ratioInterpTime += Time.deltaTime;
-                extensionRatio = Mathf.SmoothStep(oldRatio, targetRatio, ratioInterpTime / interpTimespan);
-                if (ratioInterpTime > interpTimespan)
-                {
-                    extensionRatio = targetRatio;
-                    currentlyInterp = false;
-                }
+                TelescopingShell parent = transform.parent.GetComponent<TelescopingShell>();
+                if (!parent) return;
+
+                Vector3 localTranslation = parent.getInvLocationAlongPath(extendT);
+                Quaternion localRotation = parent.getLocalRotationAlongPath(extendT);
+
+                Vector3 forwardPosition = Quaternion.Inverse(baseRotation) * localTranslation - parent.baseTranslation;
+                Quaternion forwardRotation = Quaternion.Inverse(parent.baseRotation) * Quaternion.Inverse(localRotation);
+
+                // Set the shell's local translation from parent based on how extended it is.
+                transform.localRotation = forwardRotation;
+                transform.localPosition = forwardPosition;
+
+                // Now we need to rotate by the twist angle, with the pivot being the parent's angle.
+                Vector3 parentWorld = parent.transform.position;
+                Vector3 axis = parent.transform.forward;
+                transform.RotateAround(parentWorld, axis, parent.twistAngle * twistT);
             }
-
-            Vector3 localTranslation = getLocalLocationAlongPath(Mathf.Clamp01(extensionRatio * 2));
-            Quaternion localRotation = getLocalRotationAlongPath(Mathf.Clamp01(extensionRatio * 2),
-                Mathf.Clamp01(extensionRatio * 2 - 1));
-
-            // Set the shell's local translation from parent based on how extended it is.
-            transform.localPosition = baseRotation * localTranslation + baseTranslation;
-            transform.localRotation = localRotation * baseRotation;
         }
     }
 

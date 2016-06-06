@@ -47,7 +47,14 @@ namespace Telescopes.UI
             TelescopingSegment ts = (TelescopingSegment)target;
 
             ts.material = (Material)EditorGUILayout.ObjectField("Material", ts.material, typeof(Material), false);
-            ts.fountainPrefab = (GameObject)EditorGUILayout.ObjectField("FountainPrefab", ts.fountainPrefab, typeof(GameObject), false);
+            ts.fountainPrefab = (GameObject)EditorGUILayout.ObjectField("Fountain Prefab", ts.fountainPrefab, typeof(GameObject), false);
+
+            ts.rootSegment = EditorGUILayout.Toggle("Root Segment", ts.rootSegment);
+            ts.ReversedOption = EditorGUILayout.Toggle("Reversed", ts.ReversedOption);
+
+            ts.parent = (TelescopeElement)EditorGUILayout.ObjectField("Parent telescope", ts.parent, typeof(TelescopeElement), true);
+            ts.parentElementNumber = EditorGUILayout.IntField("Parent Element Number", ts.parentElementNumber);
+            ts.offsetFromParent = EditorGUILayout.Vector3Field("Offset From Parent", ts.offsetFromParent);
 
             EditorGUILayout.Space();
 

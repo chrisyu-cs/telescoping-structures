@@ -129,6 +129,48 @@ namespace Telescopes
             return child;
         }
 
+        public static TelescopingSegment telescopeOfCone(Vector3 startPos, float startRadius,
+            Vector3 endPos, float endRadius, float wallThickness = Constants.DEFAULT_WALL_THICKNESS)
+        {
+            Vector3 segmentDirection = endPos - startPos;
+            segmentDirection.Normalize();
+            float distance = Vector3.Distance(startPos, endPos);
+            int numShells = Mathf.CeilToInt(distance / Mathf.Min(startRadius, endRadius));
 
+            Debug.Log("numShells = " + numShells);
+
+            // Length is just the distance we need to cover divided by the number of shells.
+            float lengthPerShell = distance / numShells;
+            // We attempt to choose the radii such that the telescope tapers from the start
+            // radius to the end radius over the given number of shells.
+            float radiusStep = (startRadius - endRadius) / numShells;
+            // Don't worry about curvature for now.
+            float curvature = 0;
+            // Also don't add twist angles right now.
+            float twist = 0;
+
+            List<TelescopeParameters> diffList = new List<TelescopeParameters>();
+
+            // Create the initial shell parameters.
+            TelescopeParameters initialParams = new TelescopeParameters(lengthPerShell, startRadius, wallThickness, curvature, twist);
+            diffList.Add(initialParams);
+            // Create all the diffs.
+            for (int i = 1; i < numShells; i++)
+            {
+                TelescopeParameters tp = new TelescopeParameters(0, -radiusStep, wallThickness, 0, twist);
+                diffList.Add(tp);
+            }
+
+            // Create a game object that will be the new segment.
+            GameObject obj = new GameObject();
+            TelescopingSegment seg = obj.AddComponent<TelescopingSegment>();
+            seg.material = DesignerController.instance.defaultTelescopeMaterial;
+            seg.initialDirection = segmentDirection;
+            seg.transform.position = startPos;
+
+            seg.MakeShellsFromDiffs(diffList);
+
+            return seg;
+        }
     }
 }
