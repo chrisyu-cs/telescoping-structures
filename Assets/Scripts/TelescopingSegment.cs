@@ -44,12 +44,14 @@ namespace Telescopes
         public List<TelescopeParameters> parameters;
         public List<TelescopeParameters> concreteParameters;
 
-        private List<TelescopingShell> shells;
+        public List<TelescopingShell> shells;
         private GameObject telescopeRootShell;
 
         public TelescopeElement parent;
         public int parentElementNumber;
         public Vector3 offsetFromParent;
+
+        public bool keepLocalPositionOnStart = false;
 
         public TelescopeParameters DefaultChildDiff
         {
@@ -175,14 +177,19 @@ namespace Telescopes
             TelescopeParameters previousParams = paramList[0];
             TelescopeParameters currentParams = paramList[0];
 
+            float accumulatedTaper = shell.getTaperLoss();
+
             for (int i = 1; i < paramList.Count; i++)
             {
                 // Get the computed parameters for this and the previous shell.
                 currentParams = paramList[i];
                 previousParams = paramList[i - 1];
 
+                currentParams.radius -= accumulatedTaper;
+
                 // Add it.
                 prevShell = addChildShell(prevShell, previousParams, currentParams);
+                accumulatedTaper += prevShell.getTaperLoss();
             }
 
             
@@ -213,6 +220,12 @@ namespace Telescopes
                 concreteParams.Add(theParams);
             }
 
+            // Make sure the final shell is greater than the minimum possible width.
+            if (concreteParams[concreteParams.Count - 1].radius < wallThickness)
+            {
+                concreteParams[concreteParams.Count - 1].radius = wallThickness;
+            }
+
             // Make sure that all the shells fit inside each other.
             TelescopeUtils.growChainToFit(concreteParams);
 
@@ -238,7 +251,11 @@ namespace Telescopes
             {
                 TelescopeElement element = parent.getChildElement(parentElementNumber);
                 this.transform.parent = element.transform;
-                this.transform.position = element.transform.position + offsetFromParent;
+                if (keepLocalPositionOnStart)
+                {
+                    offsetFromParent = this.transform.position - element.transform.position;
+                }
+                else this.transform.position = element.transform.position + offsetFromParent;
             }
         }
 
@@ -288,20 +305,27 @@ namespace Telescopes
             }
         }
 
-        public void ReverseTelescope()
+        public override void ExtendImmediate(float t)
         {
-            Debug.Log("Reverse");
-            // Extend the shell fully so that we have the correct world positions.
-            SetShellExtensions(1);
+            SetShellExtensions(t);
             for (int i = 1; i < shells.Count; i++)
             {
                 shells[i].SetTransform();
             }
+        }
+
+        public void ReverseTelescope()
+        {
+            Debug.Log("Reverse");
+            // Extend the shell fully so that we have the correct world positions.
+            ExtendImmediate(1);
+
+            Transform parentOfRootShell = shells[0].transform.parent;
 
             // Unparent all shells.
-            for (int i = shells.Count - 1; i >= 0; i--)
+            foreach (var shell in shells)
             {
-                shells[i].transform.parent = transform;
+                shell.transform.parent = parentOfRootShell;
             }
 
             // Reverse the parent order.

@@ -3,8 +3,10 @@ using System.Collections.Generic;
 
 namespace Telescopes
 {
-    public class TelescopeUtils
+    public static class TelescopeUtils
     {
+        static int segmentCount = 0;
+
         public static Vector3 translateAlongCircle(float curvatureAmount, float arcLength)
         {
             if (curvatureAmount > 1e-6)
@@ -129,25 +131,145 @@ namespace Telescopes
             return child;
         }
 
+        public static float GeodesicDistanceOnSphere(float radius, Vector3 v1, Vector3 v2)
+        {
+            Vector3 n1 = v1.normalized;
+            Vector3 n2 = v2.normalized;
+
+            float dot = Vector3.Dot(n1, n2);
+            float angle;
+            if (dot > 0.9999f) angle = 0;
+            else angle = Mathf.Acos(Vector3.Dot(n1, n2));
+            return radius * angle;
+        }
+
+        public static TelescopeBulb bulbOfRadius(Vector3 position, float radius)
+        {
+            GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            obj.transform.localScale = new Vector3(2 * radius, 2 * radius, 2 * radius);
+            obj.name = "bulb";
+            TelescopeBulb bulb = obj.AddComponent<TelescopeBulb>();
+            bulb.transform.position = position;
+            bulb.SetMaterial(DesignerController.instance.defaultTelescopeMaterial);
+            return bulb;
+        }
+
+        public static float ArcLengthFromChord(Vector3 v1, Vector3 v2, float curvature)
+        {
+            float c = Vector3.Distance(v1, v2);
+
+            // If there is no curvature, then return the straight segment.
+            if (curvature < 1e-6)
+            {
+                return c;
+            }
+
+            float r = 1 / curvature;
+            float theta = 2 * Mathf.Asin(c / (2 * r));
+            float arcLength = theta * r;
+
+            return arcLength;
+        }
+
+        /// <summary>
+        /// Compute the initial tangent to an arc of nonzero curvature,
+        /// given the start point, end point, and center of rotation.
+        /// </summary>
+        /// <param name="parent"></param>
+        /// <param name="child"></param>
+        /// <param name="center"></param>
+        /// <returns></returns>
+        static Vector3 CurveDirectionFromParent(Vector3 parent, Vector3 child, Vector3 center)
+        {
+            Vector3 toParent = parent - center;
+            Vector3 parentToChild = child - parent;
+            toParent.Normalize();
+
+            Vector3 planeNormal = Vector3.Cross(toParent, parentToChild).normalized;
+
+            Vector3 parentPerp = parentToChild - (Vector3.Dot(toParent, parentToChild)) * toParent;
+            Vector3 inPlanePerp = parentPerp - (Vector3.Dot(planeNormal, parentPerp)) * planeNormal;
+
+            return inPlanePerp.normalized;
+        }
+
         public static TelescopingSegment telescopeOfCone(Vector3 startPos, float startRadius,
             Vector3 endPos, float endRadius, float wallThickness = Constants.DEFAULT_WALL_THICKNESS)
         {
-            Vector3 segmentDirection = endPos - startPos;
-            segmentDirection.Normalize();
-            float distance = Vector3.Distance(startPos, endPos);
-            int numShells = Mathf.CeilToInt(distance / Mathf.Min(startRadius, endRadius));
+            return telescopeOfCone(startPos, startRadius, endPos, endRadius, Vector3.zero);
+        }
 
-            Debug.Log("numShells = " + numShells);
+        public static TelescopingSegment telescopeOfCone(Vector3 startPos, float startRadius,
+            Vector3 endPos, float endRadius, Vector3 curvatureCenter,
+            float wallThickness = Constants.DEFAULT_WALL_THICKNESS,
+            bool useCurvature = false)
+        {
+            float curvature;
+            Vector3 segmentDirection;
+
+            if (useCurvature)
+            {
+                float radius = Vector3.Distance(curvatureCenter, startPos);
+                curvature = 1f / radius;
+                if (curvature < 1e-6)
+                {
+                    curvature = 0;
+                    segmentDirection = endPos - startPos;
+                    segmentDirection.Normalize();
+                }
+                else
+                {
+                    segmentDirection = CurveDirectionFromParent(startPos, endPos, curvatureCenter);
+                }
+            }
+            else
+            {
+                curvature = 0;
+                segmentDirection = endPos - startPos;
+                segmentDirection.Normalize();
+            }
+            
+            float distance = ArcLengthFromChord(startPos, endPos, curvature);
+
+            int numShells = Mathf.CeilToInt((Mathf.Max(startRadius, endRadius) -
+                Mathf.Min(startRadius, endRadius)) / wallThickness);
+            if (numShells < 2) numShells = 2;
+
+            // int numShells = Mathf.CeilToInt(distance / Mathf.Min(startRadius, endRadius));
 
             // Length is just the distance we need to cover divided by the number of shells.
             float lengthPerShell = distance / numShells;
             // We attempt to choose the radii such that the telescope tapers from the start
             // radius to the end radius over the given number of shells.
             float radiusStep = (startRadius - endRadius) / numShells;
-            // Don't worry about curvature for now.
-            float curvature = 0;
-            // Also don't add twist angles right now.
+
             float twist = 0;
+
+            if (curvature >= 1e-6)
+            {
+                // Compute twist angles
+                Quaternion rotationToOrigin = Quaternion.FromToRotation(Vector3.forward, segmentDirection);
+                // The "up" direction we get if we just perform this rotation.
+                Vector3 untwistedUp = rotationToOrigin * Vector3.up;
+                // The "up" direction we would like to have -- orthogonal direction from circle center.
+                Vector3 startEnd = endPos - startPos;
+                Vector3 desiredUp = startEnd - Vector3.Dot(segmentDirection, startEnd) * segmentDirection;
+                desiredUp.Normalize();
+                Vector3 inverseDesired = Quaternion.Inverse(rotationToOrigin) * desiredUp;
+
+                // The angle computation doesn't work right in 3rd and 4th quadrants,
+                // so work around it by doing everything in 1st and 2nd.
+                if (inverseDesired.x < 0)
+                {
+                    inverseDesired *= -1;
+                    twist = 180;
+                }
+                
+                float angleBetween = Mathf.Atan2(Vector3.Cross(Vector3.up, inverseDesired).magnitude,
+                    Vector3.Dot(Vector3.up, inverseDesired));
+
+                twist += -angleBetween * Mathf.Rad2Deg;
+            }
 
             List<TelescopeParameters> diffList = new List<TelescopeParameters>();
 
@@ -157,20 +279,87 @@ namespace Telescopes
             // Create all the diffs.
             for (int i = 1; i < numShells; i++)
             {
-                TelescopeParameters tp = new TelescopeParameters(0, -radiusStep, wallThickness, 0, twist);
+                TelescopeParameters tp = new TelescopeParameters(0, -radiusStep, wallThickness, 0, 0);
                 diffList.Add(tp);
             }
 
             // Create a game object that will be the new segment.
             GameObject obj = new GameObject();
+            obj.name = "segment" + segmentCount;
+            segmentCount++;
+            obj.transform.position = startPos;
             TelescopingSegment seg = obj.AddComponent<TelescopingSegment>();
             seg.material = DesignerController.instance.defaultTelescopeMaterial;
             seg.initialDirection = segmentDirection;
-            seg.transform.position = startPos;
 
             seg.MakeShellsFromDiffs(diffList);
-
+            seg.transform.position = startPos;
+            
             return seg;
+        }
+
+        public static float CircleIntersectionArea(float dist, float radius1, float radius2)
+        {
+            float r = Mathf.Min(radius1, radius2);
+            float R = Mathf.Max(radius1, radius2);
+
+            if (dist >= r + R) return 0;
+            else if (dist <= R - r)
+            {
+                return Mathf.PI * r * r;
+            }
+
+            // Formula from http://mathworld.wolfram.com/Circle-CircleIntersection.html
+            float term1 = (-dist + r + R);
+            float term2 = (dist + r - R);
+            float term3 = (dist - r + R);
+            float term4 = (dist + r + R);
+
+            Debug.Log(term1 + ", " + term2 + ", " + term3 + ", " + term4);
+
+            float sqrtTerm = Mathf.Sqrt(term1 * term2 * term3 * term4);
+            return sqrtTerm / 2;
+        }
+
+        public static float CircleIntersectionArea(Vector3 center1, float radius1, Vector3 center2, float radius2)
+        {
+            float dist = Vector3.Distance(center1, center2);
+            return CircleIntersectionArea(dist, radius1, radius2);
+        }
+
+        public static bool IsColinear(Vector3 pt1, Vector3 pt2, Vector3 pt3)
+        {
+            Vector3 v1 = pt2 - pt1;
+            Vector3 v2 = pt3 - pt2;
+            v1.Normalize();
+            v2.Normalize();
+            float dot = Vector3.Dot(v1, v2);
+            return (Mathf.Abs(dot) > 0.9999f);
+        }
+
+        public static Vector3 Circumcenter(Vector3 pt1, Vector3 pt2, Vector3 pt3)
+        {
+            // Get the perpendicular bisector of pt1, pt2
+            Vector3 v12 = pt2 - pt1;
+            Vector3 v12normalized = v12.normalized;
+            Vector3 v13 = pt3 - pt1;
+            Vector3 v13normalized = v13.normalized;
+
+            Vector3 v12perp = v13 - (Vector3.Dot(v13, v12normalized)) * v12normalized;
+            v12perp.Normalize();
+
+            // Get the perpendicular bisector of pt1, pt3
+            Vector3 v13perp = v12 - (Vector3.Dot(v12, v13normalized)) * v13normalized;
+            v13perp.Normalize();
+
+            Vector3 v12base = (pt1 + pt2) / 2;
+            Vector3 v13base = (pt1 + pt3) / 2;
+
+            // Compute intersection of the two bisectors
+            Vector3 closest1, closest2;
+            Math3d.ClosestPointsOnTwoLines(out closest1, out closest2, v12base, v12perp, v13base, v13perp);
+
+            return (closest1 + closest2) / 2;
         }
     }
 }

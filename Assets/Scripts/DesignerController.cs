@@ -29,12 +29,17 @@ namespace Telescopes
         private float selectedDepth;
         
         private TreeControlPoint selectedTreePt;
+        private TreeControlPoint highlightedTreePt;
+        private Transform selectedDraggable;
 
         public LayerMask normalMask;
         public LayerMask curveModeMask;
+        public LayerMask curvatureModeMask;
+
+        public InputField filenameField;
 
         private float shootTime = 0f;
-        private float shootDelay = 0.01f;
+        private float shootDelay = 0.001f;
 
         private Vector3 lastMousePos;
 
@@ -64,16 +69,37 @@ namespace Telescopes
             Ray mouseRay = Camera.main.ScreenPointToRay(clickPos);
             RaycastHit hitInfo = new RaycastHit();
 
-            LayerMask mask = (currentMode == DesignerMode.Shell) ? normalMask : curveModeMask;
+            LayerMask mask;
+
+            switch (currentMode)
+            {
+                case DesignerMode.Shell:
+                    mask = normalMask;
+                    break;
+                case DesignerMode.Curve:
+                    mask = curveModeMask;
+                    break;
+                case DesignerMode.Curvature:
+                    mask = curvatureModeMask;
+                    break;
+                default:
+                    mask = normalMask;
+                    break;
+            }
 
             if (Physics.Raycast(mouseRay, out hitInfo, 20f, mask))
             {
                 TelescopingShell selection = hitInfo.collider.GetComponent<TelescopingShell>();
+
                 SplineControlPoint controlPt = hitInfo.collider.GetComponent<SplineControlPoint>();
                 TreeControlPoint treePt = hitInfo.collider.GetComponent<TreeControlPoint>();
+                CurvatureControlPoint curvPt = hitInfo.collider.GetComponent<CurvatureControlPoint>();
+
                 if (selection) SelectShell(selection);
+
                 else if (treePt)
                 {
+                    highlightedTreePt = treePt;
                     treePt.containingTree.SelectNode(treePt);
                     selectedTreePt = treePt;
                     selectedDepth = Camera.main.WorldToScreenPoint(treePt.transform.position).z;
@@ -82,6 +108,11 @@ namespace Telescopes
                 {
                     selectedControlPt = controlPt;
                     selectedDepth = Camera.main.WorldToScreenPoint(controlPt.transform.position).z;
+                }
+                else if (curvPt)
+                {
+                    selectedDraggable = curvPt.transform;
+                    selectedDepth = Camera.main.WorldToScreenPoint(curvPt.transform.position).z;
                 }
             }
         }
@@ -97,6 +128,11 @@ namespace Telescopes
                     modeText.text = "Curve mode";
                 }
                 else if (currentMode == DesignerMode.Curve)
+                {
+                    currentMode = DesignerMode.Curvature;
+                    modeText.text = "Curvature mode";
+                }
+                else if (currentMode == DesignerMode.Curvature)
                 {
                     currentMode = DesignerMode.Shell;
                     modeText.text = "Shell mode";
@@ -123,6 +159,14 @@ namespace Telescopes
                 clickPos.z = selectedDepth;
                 Vector3 worldPos = Camera.main.ScreenToWorldPoint(clickPos);
                 selectedTreePt.Move(worldPos);
+            }
+
+            else if (Input.GetMouseButton(0) && selectedDraggable)
+            {
+                Vector3 clickPos = Input.mousePosition;
+                clickPos.z = selectedDepth;
+                Vector3 worldPos = Camera.main.ScreenToWorldPoint(clickPos);
+                selectedDraggable.transform.position = worldPos;
             }
 
             else if (Input.GetMouseButtonDown(2))
@@ -169,6 +213,7 @@ namespace Telescopes
             {
                 selectedControlPt = null;
                 selectedTreePt = null;
+                selectedDraggable = null;
             }
 
             else if (Input.GetButtonDown("Cancel"))
@@ -178,32 +223,9 @@ namespace Telescopes
 
             else if (Input.GetButtonDown("Submit"))
             {
-                if (curve.points.Count >= 2)
+                if (highlightedTreePt)
                 {
-                    Vector3 point1 = curve.points[0].position;
-                    float radius1 = curve.points[0].radius;
-                    Vector3 point2 = curve.points[1].position;
-                    float radius2 = curve.points[1].radius;
-
-                    Vector3 startPt, endPt;
-                    float startRadius, endRadius;
-
-                    if (radius1 > radius2)
-                    {
-                        startRadius = radius1;
-                        endRadius = radius2;
-                        startPt = point1;
-                        endPt = point2;
-                    }
-                    else
-                    {
-                        startRadius = radius2;
-                        endRadius = radius1;
-                        startPt = point2;
-                        endPt = point1;
-                    }
-
-                    TelescopeUtils.telescopeOfCone(startPt, startRadius, endPt, endRadius);
+                    highlightedTreePt.containingTree.MakeTelescopes();
                 }
             }
 
@@ -338,6 +360,6 @@ namespace Telescopes
 
     public enum DesignerMode
     {
-        Shell, Curve
+        Shell, Curve, Curvature
     }
 }

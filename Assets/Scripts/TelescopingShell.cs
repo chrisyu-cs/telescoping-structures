@@ -86,12 +86,14 @@ namespace Telescopes
 
         public override Vector3 getAttachmentLocation(float t)
         {
-            return getLocalLocationAlongPath(t);
+            if (!Reversed) return getLocalLocationAlongPath(t);
+            else return getLocalLocationAlongPath(1 - t);
         }
 
         public override Quaternion getAttachmentRotation(float t)
         {
-            return getLocalRotationAlongPath(t);
+            if (!Reversed) return getLocalRotationAlongPath(t);
+            else return getLocalRotationAlongPath(1 - t);
         }
 
         public Vector3 getInvLocationAlongPath(float t)
@@ -108,6 +110,11 @@ namespace Telescopes
         public Vector3 translationOfDistance(float arcLength)
         {
             return TelescopeUtils.translateAlongCircle(curvatureAmount, arcLength);
+        }
+
+        public override void ExtendImmediate(float t)
+        {
+            // Nothing; individual shells don't extend.
         }
 
         public Quaternion getLocalRotationAlongPath(float t)
@@ -359,6 +366,11 @@ namespace Telescopes
             mFilter.mesh.RecalculateNormals();
         }
 
+        public float getTaperLoss()
+        {
+            return length * Constants.TAPER_SLOPE;
+        }
+
         CylinderMesh GenerateCylinder(float length, float radius, float curvatureAmount)
         {
             // We basically need to sweep a circular cross-section along a circular path.
@@ -368,12 +380,15 @@ namespace Telescopes
 
             // TODO: use curvatures
 
+            float radiusLoss = 0;
+
             // Generate vertices
             for (int i = 0; i < TelescopingSegment.cutsPerCylinder; i++)
             {
+                radiusLoss = i * lengthStep * Constants.TAPER_SLOPE;
                 Vector3 centerPoint = getLocalLocationAlongPath(i * lengthStep);
                 Vector3 facingDirection = getDirectionAlongPath(i * lengthStep);
-                List<IndexedVertex> circle = GenerateCircle(i, centerPoint, facingDirection, radius);
+                List<IndexedVertex> circle = GenerateCircle(i, centerPoint, facingDirection, radius - radiusLoss);
                 circles.Add(circle);
                 // TODO: update radius?
             }

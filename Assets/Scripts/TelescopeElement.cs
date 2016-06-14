@@ -18,6 +18,8 @@ namespace Telescopes
         /// <returns></returns>
         public abstract TelescopeElement getChildElement(int i);
 
+        public abstract void ExtendImmediate(float t);
+
         public abstract Vector3 getAttachmentLocation(float t);
 
         public abstract Quaternion getAttachmentRotation(float t);

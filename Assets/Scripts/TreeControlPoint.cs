@@ -10,19 +10,32 @@ namespace Telescopes
         public TreeControlPoint parent;
         public List<TreeControlPoint> children;
 
+        private Vector3 curvatureCenter;
         private static int nodeNum = 0;
+
+        public bool hasCurvature;
+
         private GameObject sphere;
+        private GameObject controlSphere;
         private SphereCollider sphereCollider;
         private LineRenderer lineRenderer;
         private MeshRenderer meshRenderer;
 
+        private CurvatureControlPoint curvatureControlPt;
+
+        public Vector3 curvaturePoint()
+        {
+            if (curvatureControlPt) return curvatureControlPt.transform.position;
+            else return Vector3.zero;
+        }
+
         void Start()
         {
-            children = new List<TreeControlPoint>();
-            node = new SphereNode(Constants.INITIAL_SPLINE_SIZE, transform.position);
+            if (children == null) children = new List<TreeControlPoint>();
+            if (node.radius == 0) node = new SphereNode(Constants.INITIAL_SPLINE_SIZE, transform.position);
             sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             sphere.transform.parent = transform;
-            sphere.transform.position = node.position;
+            sphere.transform.localPosition = Vector3.zero;
 
             meshRenderer = sphere.GetComponent<MeshRenderer>();
 
@@ -30,6 +43,8 @@ namespace Telescopes
             Destroy(c);
             sphereCollider = gameObject.AddComponent<SphereCollider>();
             sphereCollider.center = Vector3.zero;
+
+            if (parent) curvatureCenter = (node.position + parent.node.position) / 2;
 
             Move(node.position);
             Resize(node.radius);
@@ -65,7 +80,7 @@ namespace Telescopes
             Resize(oldRadius + diff);
         }
 
-        public void AddNewChild()
+        public TreeControlPoint AddNewChild()
         {
             GameObject childObj = new GameObject();
             childObj.name = "node" + nodeNum;
@@ -80,6 +95,30 @@ namespace Telescopes
             childPt.containingTree = this.containingTree;
 
             childPt.SetupLine();
+
+            childPt.curvatureControlPt = CurvatureControlPoint.AddPoint(this, childPt);
+
+            return childPt;
+        }
+
+        public void RebuildFromSerialized(NodeSerialized root)
+        {
+            node.position = new Vector3(root.positionX, root.positionY, root.positionZ);
+            node.radius = root.radius;
+
+            children = new List<TreeControlPoint>();
+
+            if (curvatureControlPt)
+            {
+                curvatureControlPt.transform.position = new Vector3(root.curvaturePointX,
+                    root.curvaturePointY, root.curvaturePointZ);
+            }
+
+            foreach (NodeSerialized child in root.children)
+            {
+                TreeControlPoint childPt = AddNewChild();
+                childPt.RebuildFromSerialized(child);
+            }
         }
 
         public void SetMaterial(Material m)
@@ -87,22 +126,91 @@ namespace Telescopes
             meshRenderer.material = m;
         }
 
+        public void SetCurvatureCenter(Vector3 center)
+        {
+            curvatureCenter = center;
+        }
+
         /// <summary>
         /// Create telescoping segments from this control point to all child control points.
-        /// This is done by first adding a bulb at this point's location with the given radius.
         /// 
         /// </summary>
         /// <returns></returns>
-        public List<TelescopingSegment> MakeTelescopesToChildren()
+        public List<TelescopeElement> MakeTelescopesToChildren(List<TelescopeElement> allSegments, TelescopeElement parent)
         {
-            return null;
+            TelescopeBulb rootBulb = TelescopeUtils.bulbOfRadius(node.position, node.radius);
+
+            if (parent)
+            {
+                parent.ExtendImmediate(1);
+                int parentNum = parent.numChildElements() - 1;
+                rootBulb.SetParent(parent, parentNum, 1);
+            }
+            
+            allSegments.Add(rootBulb);
+
+            foreach (TreeControlPoint tcp in children)
+            {
+                // If the child is smaller, we make a forward-extending telescope.
+                if (tcp.node.radius <= node.radius)
+                {
+                    TelescopingSegment childSegment = TelescopeUtils.telescopeOfCone(node.position, node.radius,
+                        tcp.node.position, tcp.node.radius, tcp.curvatureCenter, useCurvature: tcp.hasCurvature);
+                    childSegment.parent = rootBulb;
+                    childSegment.parentElementNumber = 0;
+                    allSegments.Add(childSegment);
+                    tcp.MakeTelescopesToChildren(allSegments, childSegment);
+                }
+                // Otherwise we make a backward-extending telescope, and reverse it.
+                else {
+                    TelescopingSegment childSegment = TelescopeUtils.telescopeOfCone(tcp.node.position, tcp.node.radius,
+                        node.position, node.radius, tcp.curvatureCenter, useCurvature: tcp.hasCurvature);
+                    childSegment.ReverseTelescope();
+                    childSegment.keepLocalPositionOnStart = true;
+                    childSegment.parent = rootBulb;
+                    childSegment.parentElementNumber = 0;
+                    allSegments.Add(childSegment);
+                    tcp.MakeTelescopesToChildren(allSegments, childSegment);
+                }
+            }
+            return allSegments;
+        }
+
+        Vector3[] MakeArcPoints(int numPoints)
+        {
+            if (hasCurvature)
+            {
+                Vector3[] points = new Vector3[numPoints];
+
+                float step = 1f / (numPoints - 1);
+
+                Vector3 fromDir = parent.node.position - curvatureCenter;
+                Vector3 toDir = node.position - curvatureCenter;
+
+                float currentT = 0;
+
+                for (int i = 0; i < numPoints; i++)
+                {
+                    Vector3 interpDiff = Vector3.Slerp(fromDir, toDir, currentT);
+                    points[i] = curvatureCenter + interpDiff;
+                    currentT += step;
+                }
+
+                return points;
+            }
+            else
+            {
+                Vector3[] points = { parent.node.position, node.position };
+                return points;
+            }
         }
 
         void Update()
         {
             if (lineRenderer && parent)
             {
-                Vector3[] positions = { parent.node.position, node.position };
+                Vector3[] positions = MakeArcPoints(Constants.ARC_SAMPLES);
+                lineRenderer.SetVertexCount(positions.Length);
                 lineRenderer.SetPositions(positions);
             }
         }
