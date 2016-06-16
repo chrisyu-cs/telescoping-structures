@@ -320,8 +320,10 @@ namespace Telescopes
             currentIndex = 0;
             mFilter.mesh.Clear();
 
-            CylinderMesh outerCyl = GenerateCylinder(length, radius, curvatureAmount);
-            CylinderMesh innerCyl = GenerateCylinder(length, radius - thickness, curvatureAmount);
+            float slopeCosmetic = thickness * Constants.COSMETIC_TAPER_RATIO;
+
+            CylinderMesh outerCyl = GenerateCylinder(length, radius, curvatureAmount, slopeCosmetic + Constants.TAPER_SLOPE);
+            CylinderMesh innerCyl = GenerateCylinder(length, radius - thickness, curvatureAmount, Constants.TAPER_SLOPE);
 
             // Flatten vertex list
             List<IndexedVertex> outerVerts = flattenList(outerCyl.circleCuts);
@@ -371,7 +373,7 @@ namespace Telescopes
             return length * Constants.TAPER_SLOPE;
         }
 
-        CylinderMesh GenerateCylinder(float length, float radius, float curvatureAmount)
+        CylinderMesh GenerateCylinder(float length, float radius, float curvatureAmount, float slope)
         {
             // We basically need to sweep a circular cross-section along a circular path.
             List<List<IndexedVertex>> circles = new List<List<IndexedVertex>>();
@@ -385,7 +387,7 @@ namespace Telescopes
             // Generate vertices
             for (int i = 0; i < TelescopingSegment.cutsPerCylinder; i++)
             {
-                radiusLoss = i * lengthStep * Constants.TAPER_SLOPE;
+                radiusLoss = i * lengthStep * slope;
                 Vector3 centerPoint = getLocalLocationAlongPath(i * lengthStep);
                 Vector3 facingDirection = getDirectionAlongPath(i * lengthStep);
                 List<IndexedVertex> circle = GenerateCircle(i, centerPoint, facingDirection, radius - radiusLoss);
@@ -434,8 +436,8 @@ namespace Telescopes
                 // Set the shell's local translation from parent based on how extended it is.
                 transform.localPosition = baseRotation * localTranslation + baseTranslation;
                 transform.localRotation = localRotation * baseRotation;
-
             }
+
             else
             {
                 TelescopingShell parent = transform.parent.GetComponent<TelescopingShell>();

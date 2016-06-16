@@ -309,16 +309,16 @@ namespace Telescopes
                 return Mathf.PI * r * r;
             }
 
-            // Formula from http://mathworld.wolfram.com/Circle-CircleIntersection.html
-            float term1 = (-dist + r + R);
-            float term2 = (dist + r - R);
-            float term3 = (dist - r + R);
-            float term4 = (dist + r + R);
+            float d2 = dist * dist;
+            float R2 = R * R;
+            float r2 = r * r;
 
-            Debug.Log(term1 + ", " + term2 + ", " + term3 + ", " + term4);
+            // Formula from http://jwilson.coe.uga.edu/EMAT6680Su12/Carreras/EMAT6690/Essay2/essay2.html
 
-            float sqrtTerm = Mathf.Sqrt(term1 * term2 * term3 * term4);
-            return sqrtTerm / 2;
+            float sector1 = R2 * Mathf.Acos(dist / (2 * R)) - (dist / 4) * Mathf.Sqrt(4 * R2 - d2);
+            float sector2 = r2 * Mathf.Acos(dist / (2 * r)) - (dist / 4) * Mathf.Sqrt(4 * r2 - d2);
+
+            return sector1 + sector2;
         }
 
         public static float CircleIntersectionArea(Vector3 center1, float radius1, Vector3 center2, float radius2)

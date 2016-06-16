@@ -11,7 +11,7 @@ namespace Telescopes
 
         public bool rootSegment = true;
         public bool ReversedOption;
-        private bool Reversed;
+        public bool Reversed;
 
         public GameObject fountainPrefab;
 
@@ -317,6 +317,8 @@ namespace Telescopes
         public void ReverseTelescope()
         {
             Debug.Log("Reverse");
+            Reversed = !Reversed;
+            ReversedOption = !ReversedOption;
             // Extend the shell fully so that we have the correct world positions.
             ExtendImmediate(1);
 

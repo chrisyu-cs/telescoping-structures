@@ -47,20 +47,47 @@ namespace Telescopes
             this.transform.localRotation = parentElement.getAttachmentRotation(attachmentPoint);
         }
 
-        float OverlapArea(TelescopingShell s1, TelescopingShell s2)
+        float OverlapArea(Vector3 normal1, Vector3 normal2, float radius1, float radius2)
         {
-            Vector3 dir1 = s1.transform.forward;
-            Vector3 dir2 = s2.transform.forward;
-
-            Debug.Log(dir1 + ", " + dir2);
-
-            float distance = TelescopeUtils.GeodesicDistanceOnSphere(Radius, dir1, dir2);
-
-            Debug.Log("distance = " + distance);
-
-            float area = TelescopeUtils.CircleIntersectionArea(distance, s1.radius, s2.radius);
+            float distance = TelescopeUtils.GeodesicDistanceOnSphere(Radius, normal1, normal2);
+            float area = TelescopeUtils.CircleIntersectionArea(distance, radius1, radius2);
             Debug.Log("area = " + area);
             return area;
+        }
+
+        TelescopingShell AttachedShellForChild(TelescopingSegment seg)
+        {
+            if (!seg.Reversed)
+            {
+                return seg.shells[0];
+            }
+            else {
+                return seg.shells[seg.shells.Count - 1];
+            }
+        }
+
+        TelescopingShell AttachedShellForParent(TelescopingSegment seg)
+        {
+            if (!seg.Reversed)
+            {
+                return seg.shells[seg.shells.Count - 1];
+            }
+            else
+            {
+                return seg.shells[0];
+            }
+        }
+
+        Vector3 contactDirection(TelescopingShell shell, bool reversed)
+        {
+            if (!reversed) return shell.transform.forward;
+            else
+            {
+                Vector3 dirLocal = shell.getLocalRotationAlongPath(1) * Vector3.forward;
+                Vector3 dir = shell.transform.rotation * dirLocal;
+                dir *= -1;
+                return dir;
+            }
         }
 
         public float OverlapError()
@@ -80,25 +107,52 @@ namespace Telescopes
                     TelescopingSegment seg1 = e1.GetComponent<TelescopingSegment>();
                     TelescopingSegment seg2 = e2.GetComponent<TelescopingSegment>();
 
-                    Debug.Log("Pair " + e1.name + ", " + e2.name);
-
                     if (seg1 && seg2)
                     {
-                        TelescopingShell shell1 = seg1.shells[0];
-                        TelescopingShell shell2 = seg2.shells[0];
+                        TelescopingShell shell1 = AttachedShellForChild(seg1);
+                        TelescopingShell shell2 = AttachedShellForChild(seg2);
 
-                        sumArea += OverlapArea(shell1, shell2);
+                        Vector3 n1 = contactDirection(shell1, seg1.Reversed);
+                        Vector3 n2 = contactDirection(shell2, seg2.Reversed);
+
+                        Debug.Log("n1, n2 = " + n1 + ", " + n2);
+
+                        sumArea += OverlapArea(n1, n2, shell1.radius, shell2.radius);
                     }
                 }
             }
             if (parent)
             {
-                // Now compute error between all children and the parent.
+                TelescopingSegment pSeg = parent.GetComponent<TelescopingSegment>();
+                for (int i = 0; i < numChildren; i++)
+                {
+                    Transform c = transform.GetChild(i);
+                    TelescopingSegment cSeg = c.GetComponent<TelescopingSegment>();
+
+                    if (pSeg && cSeg)
+                    {
+                        TelescopingShell pShell = AttachedShellForParent(pSeg);
+                        TelescopingShell cShell = AttachedShellForChild(cSeg);
+
+                        Debug.Log("Parent reversed = " + pSeg.Reversed);
+
+                        Vector3 nParent = contactDirection(pShell, !pSeg.Reversed);
+                        Vector3 nChild = contactDirection(cShell, cSeg.Reversed);
+
+                        Vector3 n1 = contactDirection(pShell, !pSeg.Reversed);
+                        Vector3 n2 = contactDirection(cShell, cSeg.Reversed);
+
+                        Debug.Log("n1, n2 = " + n1 + ", " + n2);
+
+                        sumArea += OverlapArea(n1, n2, pShell.radius, cShell.radius);
+                    }
+                }
             }
 
-            //float surfaceArea = 4 * Mathf.PI * Radius * Radius;
+            float surfaceArea = 4 * Mathf.PI * Radius * Radius;
+            Debug.Log("error = " + 4 * sumArea + " / " + surfaceArea);
 
-            return sumArea;
+            return 4 * sumArea / surfaceArea;
         }
 
         public void SetMaterial(Material m)
@@ -139,8 +193,12 @@ namespace Telescopes
         {
             if (Input.GetKeyDown("r"))
             {
-                Debug.Log("Bulb overlap approximate error = " + OverlapError());
+                float error = OverlapError();
+                Color c = Color.Lerp(Color.white, Color.red, error);
+
+                if (!meshRenderer) meshRenderer = GetComponent<MeshRenderer>();
+                meshRenderer.material.color = c;
             }
         }
-    } 
+    }
 }
