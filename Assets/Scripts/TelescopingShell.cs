@@ -33,6 +33,8 @@ namespace Telescopes
         private float targetRatio = 0;
         private float ratioInterpTime = 0;
 
+        public float helicality;
+
         public TelescopingSegment containingSegment;
 
         // Use this for initialization
@@ -104,7 +106,8 @@ namespace Telescopes
         public Vector3 getLocalLocationAlongPath(float t)
         {
             float arcLength = t * length;
-            return translationOfDistance(arcLength);
+            Vector3 helixOffset = arcLength * helicality * Vector3.right;
+            return translationOfDistance(arcLength) + helixOffset;
         }
 
         public Vector3 translationOfDistance(float arcLength)
@@ -315,6 +318,9 @@ namespace Telescopes
             this.radius = theParams.radius;
             this.curvatureAmount = theParams.curvature;
             this.twistAngle = theParams.twistFromParent;
+            this.helicality = theParams.helicality;
+
+            Debug.Log("helicality = " + helicality);
 
             // Reset the mesh.
             currentIndex = 0;

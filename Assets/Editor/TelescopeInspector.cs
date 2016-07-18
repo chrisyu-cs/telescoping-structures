@@ -62,6 +62,7 @@ namespace Telescopes.UI
             ts.initNumShells = EditorGUILayout.IntField("Number of Shells", ts.initNumShells);
             ts.initialDirection = EditorGUILayout.Vector3Field("Initial Direction", ts.initialDirection);
             ts.wallThickness = EditorGUILayout.FloatField("Wall Thickness", ts.wallThickness);
+            ts.helicality = EditorGUILayout.FloatField("Helicality", ts.helicality);
 
             // Keep parameter list synced with shell count
             while (ts.parameters.Count > ts.initNumShells)
