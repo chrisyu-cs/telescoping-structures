@@ -8,6 +8,17 @@ namespace Telescopes
         static int segmentCount = 0;
 
         /// <summary>
+        /// Converts a discrete curvature (bend angle) to the continuous quantity.
+        /// </summary>
+        /// <param name="discreteAngle"></param>
+        /// <param name="segLength"></param>
+        /// <returns></returns>
+        public static float CurvatureOfDiscrete(float discreteAngle, float segLength)
+        {
+            return discreteAngle / segLength;
+        }
+
+        /// <summary>
         /// Returns the signed angle in degrees between the first vector and the second.
         /// </summary>
         /// <param name="from">The first vector.</param>

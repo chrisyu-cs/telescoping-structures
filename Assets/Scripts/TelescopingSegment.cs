@@ -37,8 +37,6 @@ namespace Telescopes
         [Tooltip("How thick the walls of the geometry are to be.")]
         public float wallThickness = Constants.DEFAULT_WALL_THICKNESS;
 
-        public float helicality = 0f;
-
         [Tooltip("The resolution of the mesh -- how many loops each cylinder should have.")]
         public static int cutsPerCylinder = 10;
         public static int verticesPerCircle = 40;
@@ -212,8 +210,6 @@ namespace Telescopes
             // Compute the absolute parameter values from the list of diffs we are given.
             List<TelescopeParameters> concreteParams = new List<TelescopeParameters>();
             TelescopeParameters theParams = diffs[0];
-
-            theParams.helicality = helicality;
 
             concreteParams.Add(new TelescopeParameters(diffs[0]));
             for (int i = 1; i < initNumShells; i++)
@@ -405,7 +401,6 @@ namespace Telescopes
         public float thickness;
         public float curvature;
         public float twistFromParent;
-        public float helicality;
 
         public override string ToString()
         {
@@ -435,7 +430,6 @@ namespace Telescopes
             thickness = toCopy.thickness;
             curvature = toCopy.curvature;
             twistFromParent = toCopy.twistFromParent;
-            helicality = toCopy.helicality;
         }
 
         public TelescopeParameters(TelescopeParameters baseParams, TelescopeParameters diff)
@@ -445,7 +439,6 @@ namespace Telescopes
             thickness = baseParams.thickness;
             curvature = baseParams.curvature + diff.curvature;
             twistFromParent = diff.twistFromParent;
-            helicality = baseParams.helicality;
         }
     }
 }
