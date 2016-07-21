@@ -39,7 +39,7 @@ namespace Telescopes
         public InputField filenameField;
 
         private float shootTime = 0f;
-        private float shootDelay = 0.001f;
+        private float shootDelay = 0.05f;
 
         private Vector3 lastMousePos;
 

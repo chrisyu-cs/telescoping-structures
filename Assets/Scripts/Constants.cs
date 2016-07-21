@@ -12,6 +12,9 @@ namespace Telescopes
         public const float TAPER_SLOPE = 0f;
         public const int ARC_SAMPLES = 10;
         public const float COSMETIC_TAPER_RATIO = 0.5f;
+
+        public const float QP_LOWER_BOUND = -1000;
+        public const float QP_UPPER_BOUND = 1000;
     }
 
 }

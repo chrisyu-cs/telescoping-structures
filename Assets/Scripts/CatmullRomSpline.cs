@@ -22,7 +22,7 @@ public class CatmullRomSpline : MonoBehaviour {
             for (int i = 0; i < points.Count; i++)
             {
                 points[i] = 2f * Random.insideUnitSphere;
-                points[i] += 2f * Vector3.up;
+                points[i] += 2.5f * Vector3.up;
             }
         }
 
@@ -150,7 +150,7 @@ public class CatmullRomSpline : MonoBehaviour {
 
         if (numIterations >= maxIterations)
         {
-            Debug.Log("MAX ITERATIONS EXCEEDED");
+            Debug.Log("Iteration cutoff reached (distance = " + distance + ")");
             return startT + midT;
         }
 

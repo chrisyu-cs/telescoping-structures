@@ -7,6 +7,20 @@ namespace Telescopes
     {
         static int segmentCount = 0;
 
+        /// <summary>
+        /// Returns the signed angle in degrees between the first vector and the second.
+        /// </summary>
+        /// <param name="from">The first vector.</param>
+        /// <param name="to">The second vector.</param>
+        /// <param name="up">The vector about which the rotation should be measured.</param>
+        /// <returns>Signed angle in degrees between from and to.</returns>
+        public static float AngleBetween(Vector3 from, Vector3 to, Vector3 up)
+        {
+            Vector3 cross = Vector3.Cross(from, to);
+            float sgn = Mathf.Sign(Vector3.Dot(cross, up));
+            return Mathf.Rad2Deg * sgn * Mathf.Atan2(cross.magnitude, Vector3.Dot(from, to));
+        }
+
         public static Vector3 translateAlongCircle(float curvatureAmount, float arcLength)
         {
             if (curvatureAmount > 1e-6)
