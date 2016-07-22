@@ -57,7 +57,7 @@ namespace Telescopes
         {
             get
             {
-                TelescopeParameters tp = new TelescopeParameters(0, -wallThickness, wallThickness, 0, 0);
+                TelescopeParameters tp = new TelescopeParameters(0, -wallThickness, wallThickness, 0, 0, 0);
                 return tp;
             }
         }
@@ -400,6 +400,7 @@ namespace Telescopes
         public float radius;
         public float thickness;
         public float curvature;
+        public float torsion;
         public float twistFromParent;
 
         public override string ToString()
@@ -408,12 +409,13 @@ namespace Telescopes
                 + ", curvature " + curvature + ", twist " + twistFromParent; 
         }
 
-        public TelescopeParameters(float l, float r, float w, float c, float t)
+        public TelescopeParameters(float l, float r, float w, float c, float tors, float t)
         {
             length = l;
             radius = r;
             thickness = w;
             curvature = c;
+            torsion = tors;
             twistFromParent = t;
         }
 

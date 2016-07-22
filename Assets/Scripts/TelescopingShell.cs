@@ -68,7 +68,7 @@ namespace Telescopes
 
         public TelescopeParameters getParameters()
         {
-            TelescopeParameters tp = new TelescopeParameters(length, radius, thickness, curvatureAmount, twistAngle);
+            TelescopeParameters tp = new TelescopeParameters(length, radius, thickness, curvatureAmount, 0, twistAngle);
             return tp;
         }
 

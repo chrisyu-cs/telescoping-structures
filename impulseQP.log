@@ -1803,3 +1803,200 @@ Thread count was 8 (of 8 available processors)
 
 Optimal solution found (tolerance 1.00e-04)
 Best objective 3.163528661529e+00, best bound 3.163528662001e+00, gap 0.0000%
+
+Gurobi 6.5.2 (win64) logging started 07/22/16 14:05:20
+
+Optimize a model with 8 rows, 26 columns and 32 nonzeros
+Model has 19 quadratic objective terms
+Model has 8 SOS constraints
+Coefficient statistics:
+  Matrix range    [1e+00, 1e+00]
+  Objective range [3e-01, 9e+01]
+  Bounds range    [1e+03, 1e+03]
+  RHS range       [0e+00, 0e+00]
+Found heuristic solution: objective 4.67473e+07
+Presolve time: 0.03s
+Presolved: 8 rows, 26 columns, 32 nonzeros
+Presolved model has 19 quadratic objective terms
+Variable types: 26 continuous, 0 integer (0 binary)
+Optimize a model with 8 rows, 26 columns and 32 nonzeros
+Model has 19 quadratic objective terms
+Coefficient statistics:
+  Matrix range    [1e+00, 1e+00]
+  Objective range [3e-01, 9e+01]
+  Bounds range    [1e+03, 1e+03]
+  RHS range       [0e+00, 0e+00]
+Presolve time: 0.06s
+Presolved: 8 rows, 26 columns, 32 nonzeros
+Presolved model has 19 quadratic objective terms
+Root barrier log...
+
+Ordering time: 0.00s
+
+Barrier statistics:
+ Free vars  : 9
+ AA' NZ     : 5.900e+01
+ Factor NZ  : 1.530e+02
+ Factor Ops : 1.785e+03 (less than 1 second per iteration)
+ Threads    : 1
+
+                  Objective                Residual
+Iter       Primal          Dual         Primal    Dual     Compl     Time
+   0   4.27221382e+05 -4.70984768e+07  1.78e+03 0.00e+00  1.89e+06     0s
+   1   8.12376832e+03 -1.21686792e+07  1.78e-03 2.27e-13  2.34e+05     0s
+   2   7.98003168e+03 -1.73213037e+04  1.86e-06 7.26e-14  4.87e+02     0s
+   3   7.02732159e+02 -5.13345185e+02  2.05e-12 9.09e-13  2.34e+01     0s
+   4   1.69846096e+01  9.09665070e+00  4.55e-13 2.45e-15  1.52e-01     0s
+   5   1.57507788e+01  1.46085969e+01  2.33e-09 2.66e-15  2.20e-02     0s
+   6   1.53464463e+01  1.53357669e+01  6.59e-09 2.34e-15  2.05e-04     0s
+   7   1.53451844e+01  1.53451696e+01  7.53e-10 5.50e-15  2.85e-07     0s
+   8   1.53451831e+01  1.53451831e+01  2.73e-12 4.36e-13  2.85e-10     0s
+
+Barrier solved model in 8 iterations and 0.06 seconds
+Optimal objective 1.53451831e+01
+
+
+Root relaxation: objective 1.534518e+01, 0 iterations, 0.01 seconds
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+*    0     0               0      15.3451831   15.34518  0.00%     -    0s
+
+Explored 0 nodes (0 simplex iterations) in 0.16 seconds
+Thread count was 8 (of 8 available processors)
+
+Optimal solution found (tolerance 1.00e-04)
+Best objective 1.534518311163e+01, best bound 1.534518311162e+01, gap 0.0%
+
+Gurobi 6.5.2 (win64) logging started 07/22/16 14:06:00
+
+Optimize a model with 8 rows, 26 columns and 32 nonzeros
+Model has 19 quadratic objective terms
+Model has 8 SOS constraints
+Coefficient statistics:
+  Matrix range    [1e+00, 1e+00]
+  Objective range [1e+00, 5e+02]
+  Bounds range    [1e+03, 1e+03]
+  RHS range       [0e+00, 0e+00]
+Found heuristic solution: objective 3.9127e+07
+Presolve time: 0.00s
+Presolved: 8 rows, 26 columns, 32 nonzeros
+Presolved model has 19 quadratic objective terms
+Variable types: 26 continuous, 0 integer (0 binary)
+Optimize a model with 8 rows, 26 columns and 32 nonzeros
+Model has 19 quadratic objective terms
+Coefficient statistics:
+  Matrix range    [1e+00, 1e+00]
+  Objective range [1e+00, 5e+02]
+  Bounds range    [1e+03, 1e+03]
+  RHS range       [0e+00, 0e+00]
+Presolve time: 0.00s
+Presolved: 8 rows, 26 columns, 32 nonzeros
+Presolved model has 19 quadratic objective terms
+Root barrier log...
+
+Ordering time: 0.00s
+
+Barrier statistics:
+ Free vars  : 9
+ AA' NZ     : 5.900e+01
+ Factor NZ  : 1.530e+02
+ Factor Ops : 1.785e+03 (less than 1 second per iteration)
+ Threads    : 1
+
+                  Objective                Residual
+Iter       Primal          Dual         Primal    Dual     Compl     Time
+   0  -9.46536271e+05 -4.76593879e+07  1.60e+03 0.00e+00  1.91e+06     0s
+   1   8.15656047e+03 -1.21696970e+07  1.60e-03 3.41e-13  2.34e+05     0s
+   2   7.97498277e+03 -1.74117031e+04  1.68e-06 4.55e-13  4.88e+02     0s
+   3   7.08048390e+02 -5.26016475e+02  2.05e-12 1.90e-14  2.37e+01     0s
+   4   1.19259549e+01  3.31631890e+00  2.27e-13 3.85e-15  1.66e-01     0s
+   5   9.48566424e+00  8.28331715e+00  1.83e-09 2.17e-14  2.31e-02     0s
+   6   9.25963835e+00  9.22797615e+00  3.94e-09 4.55e-13  6.09e-04     0s
+   7   9.25243133e+00  9.25141016e+00  4.54e-11 1.64e-14  1.96e-05     0s
+   8   9.25186286e+00  9.25182388e+00  3.35e-10 3.09e-14  7.52e-07     0s
+   9   9.25182699e+00  9.25182600e+00  3.64e-09 1.78e-15  1.53e-09     0s
+
+Barrier solved model in 9 iterations and 0.00 seconds
+Optimal objective 9.25182699e+00
+
+
+Root relaxation: objective 9.251827e+00, 0 iterations, 0.00 seconds
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+*    0     0               0       9.2518261    9.25183  0.00%     -    0s
+
+Explored 0 nodes (0 simplex iterations) in 0.01 seconds
+Thread count was 8 (of 8 available processors)
+
+Optimal solution found (tolerance 1.00e-04)
+Best objective 9.251826079371e+00, best bound 9.251826079719e+00, gap 0.0000%
+
+Gurobi 6.5.2 (win64) logging started 07/22/16 14:06:24
+
+Optimize a model with 8 rows, 26 columns and 32 nonzeros
+Model has 19 quadratic objective terms
+Model has 8 SOS constraints
+Coefficient statistics:
+  Matrix range    [1e+00, 1e+00]
+  Objective range [1e+00, 1e+02]
+  Bounds range    [1e+03, 1e+03]
+  RHS range       [0e+00, 0e+00]
+Found heuristic solution: objective 4.8543e+07
+Presolve time: 0.00s
+Presolved: 8 rows, 26 columns, 32 nonzeros
+Presolved model has 19 quadratic objective terms
+Variable types: 26 continuous, 0 integer (0 binary)
+Optimize a model with 8 rows, 26 columns and 32 nonzeros
+Model has 19 quadratic objective terms
+Coefficient statistics:
+  Matrix range    [1e+00, 1e+00]
+  Objective range [1e+00, 1e+02]
+  Bounds range    [1e+03, 1e+03]
+  RHS range       [0e+00, 0e+00]
+Presolve time: 0.00s
+Presolved: 8 rows, 26 columns, 32 nonzeros
+Presolved model has 19 quadratic objective terms
+Root barrier log...
+
+Ordering time: 0.00s
+
+Barrier statistics:
+ Free vars  : 9
+ AA' NZ     : 5.900e+01
+ Factor NZ  : 1.530e+02
+ Factor Ops : 1.785e+03 (less than 1 second per iteration)
+ Threads    : 1
+
+                  Objective                Residual
+Iter       Primal          Dual         Primal    Dual     Compl     Time
+   0  -5.50433651e+04 -4.69420908e+07  1.83e+03 0.00e+00  1.89e+06     0s
+   1   8.12655922e+03 -1.21680949e+07  1.83e-03 2.84e-13  2.34e+05     0s
+   2   7.97413205e+03 -1.73445658e+04  1.92e-06 1.14e-13  4.87e+02     0s
+   3   6.99422264e+02 -5.21034343e+02  2.05e-12 1.34e-14  2.35e+01     0s
+   4   1.08713166e+01  3.32890930e+00  4.55e-13 6.02e-15  1.45e-01     0s
+   5   9.55556087e+00  8.57269449e+00  4.74e-09 4.65e-15  1.89e-02     0s
+   6   9.22569843e+00  9.21045851e+00  6.47e-09 1.18e-15  2.93e-04     0s
+   7   9.22295893e+00  9.22235739e+00  5.59e-11 2.37e-15  1.16e-05     0s
+   8   9.22291871e+00  9.22291200e+00  3.18e-10 4.55e-13  1.30e-07     0s
+   9   9.22291873e+00  9.22291869e+00  2.88e-10 1.78e-15  1.30e-10     0s
+
+Barrier solved model in 9 iterations and 0.00 seconds
+Optimal objective 9.22291873e+00
+
+
+Root relaxation: objective 9.222919e+00, 0 iterations, 0.00 seconds
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+*    0     0               0       9.2229187    9.22292  0.00%     -    0s
+
+Explored 0 nodes (0 simplex iterations) in 0.01 seconds
+Thread count was 8 (of 8 available processors)
+
+Optimal solution found (tolerance 1.00e-04)
+Best objective 9.222918695424e+00, best bound 9.222918695464e+00, gap 0.0%

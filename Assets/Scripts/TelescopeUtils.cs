@@ -32,6 +32,68 @@ namespace Telescopes
             return Mathf.Rad2Deg * sgn * Mathf.Atan2(cross.magnitude, Vector3.Dot(from, to));
         }
 
+        public static Vector3 TranslateAlongHelix(float curvature, float torsion, float arcLength)
+        {
+            if (Mathf.Abs(torsion) < 1e-6) return translateAlongCircle(curvature, arcLength);
+            if (curvature < 1e-6) return Vector3.forward * arcLength;
+
+            float sumSq = curvature * curvature + torsion * torsion;
+            float a = curvature / sumSq;
+            float b = torsion / sumSq;
+
+            float abSqrt = Mathf.Sqrt(a * a + b * b);
+
+            float t = arcLength;
+
+            Vector3 pos = new Vector3(b * t / abSqrt,
+                a * Mathf.Cos(t / abSqrt),
+                a * Mathf.Sin(t / abSqrt));
+
+            // This treats (0, 0, 0) as the center and (0, 0, a) as the first point.
+            // Want to treat (0, -a, 0) as the first point, so rotate.
+            Quaternion r = Quaternion.FromToRotation(Vector3.forward, Vector3.down);
+            pos = r * pos;
+
+            // Shift so that (0, a, 0) is the center and (0, 0, 0) is the first point.
+            pos += (a * Vector3.up);
+            return pos;
+        }
+
+        public static Quaternion RotateAlongHelix(float curvature, float torsion, float arcLength)
+        {
+            // No torsion = just a circular rotation.
+            if (Mathf.Abs(torsion) < 1e-6) return rotateAlongCircle(curvature, arcLength);
+            // Torsion but no curvature = rotate about forward axis in a screw motion
+            if (curvature < 1e-6)
+            {
+                float rotationAngle = torsion * arcLength;
+                return Quaternion.AngleAxis(Mathf.Rad2Deg * rotationAngle, Vector3.forward);
+            }
+
+            float sumSq = curvature * curvature + torsion * torsion;
+            float a = curvature / sumSq;
+            float b = torsion / sumSq;
+            float abSqrt = Mathf.Sqrt(a * a + b * b);
+
+            float t = arcLength;
+
+            Vector3 tangent = new Vector3(b / abSqrt,
+                -a / abSqrt * Mathf.Sin(t / abSqrt),
+                a / abSqrt * Mathf.Cos(t / abSqrt));
+            
+            tangent.Normalize();
+
+            Vector3 normal = new Vector3(0,
+                -Mathf.Cos(t / abSqrt),
+                -Mathf.Sin(t / abSqrt));
+            normal.Normalize();
+
+            // Corrective rotation so that initial tangent is forward.
+            Quaternion r = Quaternion.FromToRotation(Vector3.forward, Vector3.down);
+
+            return Quaternion.LookRotation(tangent, normal) * r;
+        }
+
         public static Vector3 translateAlongCircle(float curvatureAmount, float arcLength)
         {
             if (curvatureAmount > 1e-6)
@@ -299,12 +361,12 @@ namespace Telescopes
             List<TelescopeParameters> diffList = new List<TelescopeParameters>();
 
             // Create the initial shell parameters.
-            TelescopeParameters initialParams = new TelescopeParameters(lengthPerShell, startRadius, wallThickness, curvature, twist);
+            TelescopeParameters initialParams = new TelescopeParameters(lengthPerShell, startRadius, wallThickness, curvature, 0, twist);
             diffList.Add(initialParams);
             // Create all the diffs.
             for (int i = 1; i < numShells; i++)
             {
-                TelescopeParameters tp = new TelescopeParameters(0, -radiusStep, wallThickness, 0, 0);
+                TelescopeParameters tp = new TelescopeParameters(0, -radiusStep, wallThickness, 0, 0, 0);
                 diffList.Add(tp);
             }
 

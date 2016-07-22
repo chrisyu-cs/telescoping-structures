@@ -25,9 +25,9 @@ namespace Telescopes.UI
                 while (ts.parameters.Count < ts.initNumShells)
                 {
                     if (ts.parameters.Count == 0)
-                        ts.parameters.Add(new TelescopeParameters(1, 0.5f, ts.wallThickness, 0, 0));
+                        ts.parameters.Add(new TelescopeParameters(1, 0.5f, ts.wallThickness, 0, 0, 0));
                     else
-                        ts.parameters.Add(new TelescopeParameters(0, 0, ts.wallThickness, 0, 0));
+                        ts.parameters.Add(new TelescopeParameters(0, 0, ts.wallThickness, 0, 0, 0));
                     foldouts.Add(false);
                 }
             }
@@ -72,9 +72,9 @@ namespace Telescopes.UI
             while (ts.parameters.Count < ts.initNumShells)
             {
                 if (ts.parameters.Count == 0)
-                    ts.parameters.Add(new TelescopeParameters(1, 0.5f, ts.wallThickness, 0, 0));
+                    ts.parameters.Add(new TelescopeParameters(1, 0.5f, ts.wallThickness, 0, 0, 0));
                 else
-                    ts.parameters.Add(new TelescopeParameters(0, 0, ts.wallThickness, 0, 0));
+                    ts.parameters.Add(new TelescopeParameters(0, 0, ts.wallThickness, 0, 0, 0));
                 foldouts.Add(false);
             }
 
