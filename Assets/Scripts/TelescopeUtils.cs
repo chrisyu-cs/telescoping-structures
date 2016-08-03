@@ -37,6 +37,11 @@ namespace Telescopes
             if (Mathf.Abs(torsion) < 1e-6) return translateAlongCircle(curvature, arcLength);
             if (curvature < 1e-6) return Vector3.forward * arcLength;
 
+            // Correct because the initial tangent of a helix isn't (0, 0, 1),
+            // but we want it to be for linking up of helical pieces.
+            OrthonormalFrame zeroFrame = FrameAlongHelix(curvature, torsion, 0);
+            Quaternion correctiveR = Quaternion.Inverse(Quaternion.LookRotation(zeroFrame.T, zeroFrame.N));
+
             float sumSq = curvature * curvature + torsion * torsion;
             float a = curvature / sumSq;
             float b = torsion / sumSq;
@@ -52,22 +57,32 @@ namespace Telescopes
             // This treats (0, 0, 0) as the center and (0, 0, a) as the first point.
             // Want to treat (0, -a, 0) as the first point, so rotate.
             Quaternion r = Quaternion.FromToRotation(Vector3.forward, Vector3.down);
-            pos = r * pos;
+
+            pos.y *= -1;
 
             // Shift so that (0, a, 0) is the center and (0, 0, 0) is the first point.
             pos += (a * Vector3.up);
-            return pos;
+            return correctiveR * pos;
         }
 
-        public static Quaternion RotateAlongHelix(float curvature, float torsion, float arcLength)
+        public static OrthonormalFrame FrameAlongHelix(float curvature, float torsion, float arcLength)
         {
             // No torsion = just a circular rotation.
-            if (Mathf.Abs(torsion) < 1e-6) return rotateAlongCircle(curvature, arcLength);
+            if (Mathf.Abs(torsion) < 1e-6)
+            {
+                OrthonormalFrame defaultFrame = new OrthonormalFrame(Vector3.forward, Vector3.up,
+                    Vector3.Cross(Vector3.forward, Vector3.up));
+                Quaternion r = rotateAlongCircle(curvature, arcLength);
+                return defaultFrame.RotatedBy(r);
+            }
             // Torsion but no curvature = rotate about forward axis in a screw motion
             if (curvature < 1e-6)
             {
+                OrthonormalFrame defaultFrame = new OrthonormalFrame(Vector3.forward, Vector3.up,
+                    Vector3.Cross(Vector3.forward, Vector3.up));
                 float rotationAngle = torsion * arcLength;
-                return Quaternion.AngleAxis(Mathf.Rad2Deg * rotationAngle, Vector3.forward);
+                Quaternion r = Quaternion.AngleAxis(Mathf.Rad2Deg * rotationAngle, Vector3.forward);
+                return defaultFrame.RotatedBy(r);
             }
 
             float sumSq = curvature * curvature + torsion * torsion;
@@ -77,21 +92,48 @@ namespace Telescopes
 
             float t = arcLength;
 
-            Vector3 tangent = new Vector3(b / abSqrt,
-                -a / abSqrt * Mathf.Sin(t / abSqrt),
-                a / abSqrt * Mathf.Cos(t / abSqrt));
-            
+            Vector3 tangent = new Vector3(b,
+                -a * Mathf.Sin(t / abSqrt),
+                 a * Mathf.Cos(t / abSqrt)) / abSqrt;
+            tangent.y *= -1;
             tangent.Normalize();
 
             Vector3 normal = new Vector3(0,
-                -Mathf.Cos(t / abSqrt),
-                -Mathf.Sin(t / abSqrt));
+                Mathf.Cos(t / abSqrt),
+                Mathf.Sin(t / abSqrt)) * -1;
+            normal.y *= -1;
             normal.Normalize();
+
+            Vector3 binormal = Vector3.Cross(tangent, normal);
+
+            return new OrthonormalFrame(tangent, normal, binormal);
+        }
+
+        public static Quaternion RotateAlongHelix(float curvature, float torsion, float arcLength)
+        {
+            // No torsion = just a circular rotation.
+            if (Mathf.Abs(torsion) < 1e-6)
+            {
+                return rotateAlongCircle(curvature, arcLength);
+            }
+            // Torsion but no curvature = rotate about forward axis in a screw motion
+            if (curvature < 1e-6)
+            {
+                float rotationAngle = torsion * arcLength;
+                return Quaternion.AngleAxis(Mathf.Rad2Deg * rotationAngle, Vector3.forward);
+            }
+
+            // Correct because the initial tangent of a helix isn't (0, 0, 1),
+            // but we want it to be for linking up of helical pieces.
+            OrthonormalFrame zeroFrame = FrameAlongHelix(curvature, torsion, 0);
+            Quaternion correctiveR = Quaternion.Inverse(Quaternion.LookRotation(zeroFrame.T, zeroFrame.N));
+
+            OrthonormalFrame frame = FrameAlongHelix(curvature, torsion, arcLength);
 
             // Corrective rotation so that initial tangent is forward.
             Quaternion r = Quaternion.FromToRotation(Vector3.forward, Vector3.down);
 
-            return Quaternion.LookRotation(tangent, normal) * r;
+            return correctiveR * Quaternion.LookRotation(frame.T, frame.N);
         }
 
         public static Vector3 translateAlongCircle(float curvatureAmount, float arcLength)

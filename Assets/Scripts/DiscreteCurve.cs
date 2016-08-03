@@ -12,7 +12,6 @@ namespace Telescopes
     [RequireComponent(typeof(LineRenderer))]
     public class DiscreteCurve : MonoBehaviour
     {
-
         private Vector3 startingPoint;
         private Vector3 startingDirection;
         private Vector3 startingBinormal;
@@ -369,6 +368,7 @@ namespace Telescopes
 
         public void SolveImpulses(int numSegments)
         {
+            // ====================== BEGIN LP ======================= //
             GRBEnv env = new GRBEnv("impulseQP.log");
             GRBModel model = new GRBModel(env);
 
@@ -393,7 +393,7 @@ namespace Telescopes
             List<GRBVar> absDiffsMinus = new List<GRBVar>();
 
             // Made variables that will represent absolute values of diffs.
-            for (int i = 1; i < sigma.Count; i++)
+            for (int i = 0; i < sigma.Count; i++)
             {
                 GRBVar vPlus = model.AddVar(0, Constants.QP_UPPER_BOUND,
                     0, GRB.CONTINUOUS, "diff" + i + "+");
@@ -411,14 +411,18 @@ namespace Telescopes
             {
                 GRBVar vPlus = absDiffsPlus[i];
                 GRBVar vMinus = absDiffsMinus[i];
-                GRBLinExpr diff = sigma[i + 1] - sigma[i];
+                GRBLinExpr expectedTwist;
+                if (i == 0) expectedTwist = slope * arcStep;
+                else expectedTwist = sigma[i - 1] + slope * arcStep;
+                GRBLinExpr diff = sigma[i] - expectedTwist;
 
                 GRBTempConstr tempConstr = (diff == vPlus - vMinus);
                 model.AddConstr(tempConstr, "diffConstr" + i);
 
+                /*
                 GRBVar[] vars = new GRBVar[] { vPlus, vMinus };
                 double[] weights = { 1, 1 };
-                model.AddSOS(vars, weights, GRB.SOS_TYPE1);
+                model.AddSOS(vars, weights, GRB.SOS_TYPE1);*/
             }
 
             GRBQuadExpr objective = 0;
@@ -433,6 +437,7 @@ namespace Telescopes
                 cumulativeTwist += Mathf.Deg2Rad * discretizedPoints[i].twistingAngle;
                 float arcPosition = i * segmentLength;
                 int stepNum = Mathf.FloorToInt(arcPosition / arcStep);
+                // Find the distance past the most recent impulse point.
                 float arcDistanceFromPt = arcPosition - (stepNum * arcStep);
                 // Implicitly sigma_0 = 0, so the error contribution here
                 // is just the difference from the segments starting at 0.
@@ -463,14 +468,27 @@ namespace Telescopes
             model.SetObjective(objective);
             model.Optimize();
 
+            for(int i = 0; i < absDiffsMinus.Count; i++)
+            {
+                double min = System.Math.Min(absDiffsMinus[i].Get(GRB.DoubleAttr.X),
+                    absDiffsPlus[i].Get(GRB.DoubleAttr.X));
+                Debug.Log("min of abs values " + i + " = " + min);
+            }
+
+            // Read out the recommended constant torsion
+            float constTorsion = (float)slope.Get(GRB.DoubleAttr.X);
+
             // Read out the resulting impulses by computing differences
             List<float> impulses = new List<float>();
             impulses.Add(0);
-            impulses.Add((float)sigma[0].Get(GRB.DoubleAttr.X));
+            double expectedInitial = arcStep * constTorsion;
+            double initDiff = sigma[0].Get(GRB.DoubleAttr.X) - expectedInitial;
+            impulses.Add((float)initDiff);
 
             for (int i = 1; i < sigma.Count; i++)
             {
-                double diff = sigma[i].Get(GRB.DoubleAttr.X) - sigma[i - 1].Get(GRB.DoubleAttr.X);
+                double expectedI = sigma[i - 1].Get(GRB.DoubleAttr.X) + arcStep * constTorsion;
+                double diff = sigma[i].Get(GRB.DoubleAttr.X) - expectedI;
                 impulses.Add((float)diff);
             }
 
@@ -482,6 +500,28 @@ namespace Telescopes
             Debug.Log(slope.Get(GRB.StringAttr.VarName) + " = " + slope.Get(GRB.DoubleAttr.X));
 
             Debug.Log("Objective value: " + model.Get(GRB.DoubleAttr.ObjVal));
+
+            // ====================== END LP ======================= //
+
+            // Get the average curvature of this curve
+            float averageCurvature = 0;
+            foreach (DCurvePoint dcp in discretizedPoints)
+            {
+                averageCurvature += dcp.bendingAngle * Mathf.Deg2Rad;
+            }
+            averageCurvature /= discretizedPoints.Count;
+            averageCurvature = TelescopeUtils.CurvatureOfDiscrete(averageCurvature, segmentLength);
+
+            Vector3 startingNormal = Vector3.Cross(startingBinormal, startingDirection);
+            OrthonormalFrame startFrame = new OrthonormalFrame(startingDirection, startingNormal, startingBinormal);
+
+            GameObject obj = new GameObject();
+            TorsionImpulseCurve impulseCurve = obj.AddComponent<TorsionImpulseCurve>();
+            impulseCurve.InitFromData(impulses, arcStep,
+                averageCurvature, constTorsion,
+                startFrame, startingPoint);
+
+            impulseCurve.SetMaterial(lineRender.material);
         }
     }
 
