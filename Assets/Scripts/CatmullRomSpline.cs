@@ -154,7 +154,7 @@ namespace Telescopes
 
             if (numIterations >= maxIterations)
             {
-                Debug.Log("Iteration cutoff reached (distance = " + distance + ")");
+                //Debug.Log("Iteration cutoff reached (distance = " + distance + ")");
                 return startT + midT;
             }
 

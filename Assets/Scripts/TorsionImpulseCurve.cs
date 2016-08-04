@@ -53,7 +53,11 @@ namespace Telescopes
         public void SetMaterial(Material mat)
         {
             lRenderer.material = mat;
-            lRenderer.SetColors(Color.cyan, Color.cyan);
+        }
+
+        public void SetColor(Color c)
+        {
+            lRenderer.SetColors(c, c);
         }
 
         void AddPointsOfSegment(CurveSegment seg)

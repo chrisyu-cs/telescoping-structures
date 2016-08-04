@@ -17,6 +17,7 @@ namespace Telescopes
         public InputField twistField;
 
         public InputField splinePoints;
+        public InputField impulsePoints;
 
         public Material defaultTelescopeMaterial;
         public Material selectedTelescopeMaterial;
@@ -43,6 +44,8 @@ namespace Telescopes
 
         private Vector3 lastMousePos;
 
+        public int numImpulses = 10;
+
         void Awake()
         {
             selectedDepth = 0;
@@ -62,6 +65,7 @@ namespace Telescopes
             currentMode = DesignerMode.Shell;
             modeText.text = "Shell mode";
             splinePoints.text = "0";
+            impulsePoints.text = numImpulses.ToString();
         }
 
         void RaycastShells(Vector3 clickPos)
@@ -339,6 +343,11 @@ namespace Telescopes
                     SelectShell(childShell);
                 }
             }
+        }
+
+        public void SetNumImpulses()
+        {
+            numImpulses = int.Parse(impulsePoints.text);
         }
 
         public void ShootSphere()
