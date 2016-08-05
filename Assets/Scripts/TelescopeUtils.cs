@@ -180,9 +180,9 @@ namespace Telescopes
 
         public static Vector3 childBasePosition(TelescopeParameters parent, TelescopeParameters child)
         {
-            Vector3 translationToBase = translateAlongCircle(parent.curvature, parent.length);
-            Quaternion rotationToBase = rotateAlongCircle(parent.curvature, parent.length);
-            Vector3 translationBackwards = translateAlongCircle(child.curvature, -child.length);
+            Vector3 translationToBase = TranslateAlongHelix(parent.curvature, parent.torsion, parent.length);
+            Quaternion rotationToBase = RotateAlongHelix(parent.curvature, parent.torsion, parent.length);
+            Vector3 translationBackwards = TranslateAlongHelix(child.curvature, child.torsion, -child.length);
 
             translationToBase = translationToBase + (rotationToBase * translationBackwards);
             return translationToBase;
@@ -190,8 +190,8 @@ namespace Telescopes
 
         public static Quaternion childBaseRotation(TelescopeParameters parent, TelescopeParameters child)
         {
-            Quaternion rotationToBase = rotateAlongCircle(parent.curvature, parent.length);
-            Quaternion rotationBack = rotateAlongCircle(child.curvature, -child.length);
+            Quaternion rotationToBase = RotateAlongHelix(parent.curvature, parent.torsion, parent.length);
+            Quaternion rotationBack = RotateAlongHelix(child.curvature, child.torsion, -child.length);
             return rotationBack * rotationToBase;
         }
 
@@ -420,7 +420,7 @@ namespace Telescopes
             TelescopingSegment seg = obj.AddComponent<TelescopingSegment>();
             seg.material = DesignerController.instance.defaultTelescopeMaterial;
             seg.initialDirection = segmentDirection;
-
+            
             seg.MakeShellsFromDiffs(diffList);
             seg.transform.position = startPos;
             

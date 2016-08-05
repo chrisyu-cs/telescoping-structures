@@ -44,6 +44,9 @@ namespace Telescopes
 
         private Vector3 lastMousePos;
 
+        public Toggle sparseToggle;
+        public bool UseSparseSolve = true;
+
         public int numImpulses = 10;
 
         void Awake()
@@ -119,6 +122,11 @@ namespace Telescopes
                     selectedDepth = Camera.main.WorldToScreenPoint(curvPt.transform.position).z;
                 }
             }
+        }
+
+        public void ToggleSparse()
+        {
+            UseSparseSolve = sparseToggle.isOn;
         }
 
         // Update is called once per frame
@@ -242,6 +250,7 @@ namespace Telescopes
 
         public void SetSplinePoints()
         {
+            if (!curve || !curve.isActiveAndEnabled) return;
             int num = int.Parse(splinePoints.text);
             if (num < 0) return;
             int currentNum = curve.points.Count;
@@ -262,7 +271,6 @@ namespace Telescopes
                 {
                     curve.points.RemoveAt(curve.points.Count - 1);
                 }
-
             }
         }
 
@@ -295,7 +303,7 @@ namespace Telescopes
             {
                 selected.length = float.Parse(lengthField.text);
                 selected.radius = float.Parse(radiusField.text);
-                selected.curvatureAmount = float.Parse(curvatureField.text);
+                selected.curvature = float.Parse(curvatureField.text);
                 selected.twistAngle = float.Parse(twistField.text);
             }
         }

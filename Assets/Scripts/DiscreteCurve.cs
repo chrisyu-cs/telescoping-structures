@@ -276,8 +276,14 @@ namespace Telescopes
             else if (Input.GetKeyDown("o"))
             {
                 bool isShiftKeyDown = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-                if (isShiftKeyDown) SolveImpulseLP(DesignerController.instance.numImpulses);
-                else SolveImpulsesQP(DesignerController.instance.numImpulses);
+
+                List<float> points = EvenlySpacedPoints(DesignerController.instance.numImpulses);
+                if (isShiftKeyDown)
+                {
+                    if (DesignerController.instance.UseSparseSolve) SolveImpulseLPSparse(points);
+                    else SolveImpulseLP(points);
+                }
+                else SolveImpulsesQP(points);
             }
 
             if (flowMode == FlowMode.CurvatureFlow)
@@ -293,6 +299,19 @@ namespace Telescopes
                 ComputeFrenetFrames();
                 ComputeBishopFrames();
             }
+        }
+
+        List<float> EvenlySpacedPoints(int num)
+        {
+            float step = ArcLength / num;
+            List<float> steps = new List<float>();
+            for (int i = 0; i < num; i++)
+            {
+                steps.Add(i * step);
+            }
+            steps.Add(ArcLength);
+
+            return steps;
         }
 
         public float ArcLength
@@ -382,9 +401,8 @@ namespace Telescopes
             return averageCurvature;
         }
 
-        TorsionImpulseCurve MakeTorsionImpulseCurve(List<float> impulses, float arcStep, float constTorsion)
+        TorsionImpulseCurve MakeTorsionImpulseCurve(List<float> impulses, List<float> arcPoints, float constTorsion)
         {
-            Debug.Log(impulses.Count + " impulses, torsion slope = " + constTorsion);
             float averageCurvature = AverageCurvature();
 
             Vector3 startingNormal = Vector3.Cross(startingBinormal, startingDirection);
@@ -396,18 +414,25 @@ namespace Telescopes
                 Destroy(g.gameObject);
             }
 
+            List<float> arcSteps = new List<float>();
+            for (int i = 0; i < arcPoints.Count - 1; i++)
+            {
+                arcSteps.Add(arcPoints[i + 1] - arcPoints[i]);
+            }
+
             GameObject obj = new GameObject();
             obj.name = "TorsionApproxCurve";
             TorsionImpulseCurve impulseCurve = obj.AddComponent<TorsionImpulseCurve>();
-            impulseCurve.InitFromData(impulses, arcStep,
+            impulseCurve.InitFromData(impulses, arcSteps,
                 averageCurvature, constTorsion,
-                startFrame, startingPoint);
+                startFrame, discretizedPoints[0].position);
 
             impulseCurve.SetMaterial(lineRender.material);
+
             return impulseCurve;
         }
 
-        public void SolveImpulsesQP(int numSegments)
+        public void SolveImpulsesQP(List<float> arcPoints)
         {
             // ====================== BEGIN LP ======================= //
             GRBEnv env = new GRBEnv("impulseQP.log");
@@ -415,15 +440,13 @@ namespace Telescopes
 
             List<GRBVar> sigma = new List<GRBVar>();
 
-            float arcStep = ArcLength / numSegments;
-
             GRBVar slope = model.AddVar(Constants.QP_LOWER_BOUND, Constants.QP_UPPER_BOUND,
                 0, GRB.CONTINUOUS, "slope");
 
             // Make the variables.
             // We use the cumulative torsion values at each separating point as the variables,
             // because this simplifies computing the error functions later.
-            for (int i = 1; i < numSegments; i++)
+            for (int i = 1; i < arcPoints.Count - 1; i++)
             {
                 GRBVar v = model.AddVar(Constants.QP_LOWER_BOUND, Constants.QP_UPPER_BOUND,
                     0, GRB.CONTINUOUS, "sigma" + i);
@@ -453,17 +476,13 @@ namespace Telescopes
                 GRBVar vPlus = absDiffsPlus[i];
                 GRBVar vMinus = absDiffsMinus[i];
                 GRBLinExpr expectedTwist;
-                if (i == 0) expectedTwist = slope * arcStep;
-                else expectedTwist = sigma[i - 1] + slope * arcStep;
+                float segLength = arcPoints[i + 1] - arcPoints[i];
+                if (i == 0) expectedTwist = slope * segLength;
+                else expectedTwist = sigma[i - 1] + slope * segLength;
                 GRBLinExpr diff = sigma[i] - expectedTwist;
 
                 GRBTempConstr tempConstr = (diff == vPlus - vMinus);
                 model.AddConstr(tempConstr, "diffConstr" + i);
-
-                /*
-                GRBVar[] vars = new GRBVar[] { vPlus, vMinus };
-                double[] weights = { 1, 1 };
-                model.AddSOS(vars, weights, GRB.SOS_TYPE1);*/
             }
 
             GRBQuadExpr objective = 0;
@@ -477,9 +496,16 @@ namespace Telescopes
             {
                 cumulativeTwist += Mathf.Deg2Rad * discretizedPoints[i].twistingAngle;
                 float arcPosition = i * segmentLength;
-                int stepNum = Mathf.FloorToInt(arcPosition / arcStep);
+
+                // Find the last arc point that comes before the sample point
+                int stepNum = 0;
+                for (int j = 0; j < arcPoints.Count; j++)
+                {
+                    if (arcPoints[j] > arcPosition) break;
+                    stepNum = j;
+                }
                 // Find the distance past the most recent impulse point.
-                float arcDistanceFromPt = arcPosition - (stepNum * arcStep);
+                float arcDistanceFromPt = arcPosition - arcPoints[stepNum];
                 // Implicitly sigma_0 = 0, so the error contribution here
                 // is just the difference from the segments starting at 0.
                 GRBQuadExpr error;
@@ -500,10 +526,14 @@ namespace Telescopes
                 objective.Add(error);
             }
 
-            for (int i = 0; i < absDiffsMinus.Count; i++)
+            // Add L1 terms to encourage sparsity if enabled
+            if (DesignerController.instance.UseSparseSolve)
             {
-                //objective.AddTerm(1, absDiffsMinus[i]);
-                //objective.AddTerm(1, absDiffsPlus[i]);
+                for (int i = 0; i < absDiffsMinus.Count; i++)
+                {
+                    objective.AddTerm(1, absDiffsMinus[i]);
+                    objective.AddTerm(1, absDiffsPlus[i]);
+                }
             }
 
             model.SetObjective(objective);
@@ -523,7 +553,7 @@ namespace Telescopes
             // Read out the resulting impulses by computing differences
             List<float> impulses = new List<float>();
             impulses.Add(0);
-            double expectedInitial = arcStep * constTorsion;
+            double expectedInitial = arcPoints[1] * constTorsion;
             double initDiff = sigma[0].Get(GRB.DoubleAttr.X) - expectedInitial;
             impulses.Add((float)initDiff);
 
@@ -532,6 +562,7 @@ namespace Telescopes
 
             for (int i = 1; i < sigma.Count; i++)
             {
+                double arcStep = arcPoints[i + 1] - arcPoints[i];
                 double expectedI = sigma[i - 1].Get(GRB.DoubleAttr.X) + arcStep * constTorsion;
                 double diff = sigma[i].Get(GRB.DoubleAttr.X) - expectedI;
                 if (System.Math.Abs(diff) > 1e-6)
@@ -544,10 +575,9 @@ namespace Telescopes
             }
             double averageImpulse = sumImpulses / impulses.Count;
 
-            // Debug.Log(numNonzeroImpulses + " non-zero impulses; average magnitude = " + averageImpulse);
-
-            // Get the average curvature of this curve
-            var t = MakeTorsionImpulseCurve(impulses, arcStep, constTorsion);
+            Debug.Log(numNonzeroImpulses + " non-zero impulses (sparse QP)");
+            
+            var t = MakeTorsionImpulseCurve(impulses, arcPoints, constTorsion);
             t.SetColor(Color.cyan);
         }
 
@@ -600,10 +630,48 @@ namespace Telescopes
             return (1 - interpFactor) * prevTwist + interpFactor * nextTwist;
         }
 
-        public void SolveImpulseLP(int numSegments)
+        public void SolveImpulseLPSparse(List<float> arcPoints)
         {
-            float arcStep = ArcLength / numSegments;
-            
+            float ratio = 0;
+            float slope = 0;
+            List<float> impulses;
+            List<float> sparsePoints = new List<float>(arcPoints);
+
+            float cutoffThreshold = 0.5f;
+            do
+            {
+                Tuple<float, List<float>> results = SolveImpulseLP(sparsePoints, makeCurve: false);
+                slope = results.Item1;
+                impulses = results.Item2;
+
+                float average = 0;
+                float min = Mathf.Abs(impulses[1]);
+                // The first impulse is always 0 so ignore it.
+                int minIndex = 0;
+                for (int i = 1; i < impulses.Count; i++)
+                {
+                    average += Mathf.Abs(impulses[i]);
+                    float nextImpulse = Mathf.Abs(impulses[i]);
+                    if (nextImpulse < min)
+                    {
+                        min = nextImpulse;
+                        minIndex = i;
+                    }
+                }
+                average /= impulses.Count;
+                ratio = min / average;
+                if (ratio < cutoffThreshold) sparsePoints.RemoveAt(minIndex);
+            }
+            while (ratio < cutoffThreshold);
+
+            Debug.Log(impulses.Count + " impulses (sparse LP)");
+
+            TorsionImpulseCurve t = MakeTorsionImpulseCurve(impulses, sparsePoints, slope);
+            t.SetColor(Color.magenta);
+        }
+
+        public Tuple<float, List<float>> SolveImpulseLP(List<float> arcPoints, bool makeCurve = true)
+        {
             float cumulative = 0;
 
             // Compute the cumulative torsion at each point
@@ -618,10 +686,10 @@ namespace Telescopes
 
             TwistFunction T = (i => discretizedPoints[i].cumulativeTwist);
 
-            for (int i = 0; i < numSegments; i++)
+            for (int i = 0; i < arcPoints.Count - 1; i++)
             {
-                float intervalStart = i * arcStep;
-                float intervalEnd = intervalStart + arcStep;
+                float intervalStart = arcPoints[i];
+                float intervalEnd = arcPoints[i + 1];
 
                 RealFunction phi = InterpolateTorsion;
                 RealFunction xPhi = (x => x * InterpolateTorsion(x));
@@ -641,11 +709,11 @@ namespace Telescopes
             double sum_hi3 = 0;
             double sum_di = 0;
 
-            for (int i = 1; i < numSegments; i++)
+            for (int i = 1; i < arcPoints.Count - 1; i++)
             {
                 // Compute all the relevant values
-                double x_i = i * arcStep;
-                double x_i1 = x_i + arcStep;
+                double x_i = arcPoints[i];
+                double x_i1 = arcPoints[i + 1];
 
                 double h_i1 = x_i1 - x_i;
                 double h_i2 = (x_i1 * x_i1) - (x_i * x_i);
@@ -669,7 +737,7 @@ namespace Telescopes
             // Set coefficient of a in constraint 0 to be 1/3 sum_{i=1}^k h_i3
             triples.Add(new Tuple<int, int, double>(0, 0, sum_hi3));
 
-            Matrix<double> mat = SparseMatrix.OfIndexed(numSegments, numSegments, triples);
+            Matrix<double> mat = SparseMatrix.OfIndexed(arcPoints.Count - 1, arcPoints.Count - 1, triples);
             
             Vector<double> rhs = Vector.Build.DenseOfEnumerable(rhsList);
             Vector<double> solved = mat.Solve(rhs);
@@ -678,7 +746,7 @@ namespace Telescopes
 
             List<float> impulses = new List<float>();
             impulses.Add(0);
-
+            
             for(int i = 1; i < solved.Count; i++)
             {
                 double prev = (i == 1) ? 0 : solved[i - 1];
@@ -688,8 +756,13 @@ namespace Telescopes
                 impulses.Add((float)diff);
             }
 
-            TorsionImpulseCurve t = MakeTorsionImpulseCurve(impulses, arcStep, (float)slope);
-            t.SetColor(Color.magenta);
+            if (makeCurve)
+            {
+                TorsionImpulseCurve t = MakeTorsionImpulseCurve(impulses, arcPoints, (float)slope);
+                t.SetColor(Color.magenta);
+            }
+
+            return new Tuple<float, List<float>>((float)slope, impulses);
         }
     }
 

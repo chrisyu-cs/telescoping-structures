@@ -192,8 +192,7 @@ namespace Telescopes
 
                 lineRender.SetVertexCount(discretePoints.Count);
                 lineRender.SetPositions(discretePoints.ToArray());
-
-
+                
                 GameObject discretized = new GameObject();
 
                 discretized.name = "DiscretizedCurve";

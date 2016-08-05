@@ -16,7 +16,8 @@ namespace Telescopes
         public GameObject fountainPrefab;
 
         [Tooltip("The direction of the first shell.")]
-        public Vector3 initialDirection = Vector3.up;
+        public Vector3 initialDirection = Vector3.forward;
+        public Vector3 initialUp = Vector3.up;
         [Tooltip("How many shells will be in the structure.")]
         public int initNumShells = 4;
 
@@ -52,6 +53,7 @@ namespace Telescopes
         public Vector3 offsetFromParent;
 
         public bool keepLocalPositionOnStart = false;
+        public SegmentParametersMode paramMode = SegmentParametersMode.Diffs;
 
         public TelescopeParameters DefaultChildDiff
         {
@@ -154,9 +156,8 @@ namespace Telescopes
 
             // Shells don't know anything about their position/rotation,
             // so we set that here.
-            Quaternion rotation = Quaternion.FromToRotation(Vector3.forward, initialDirection);
-            Quaternion roll = Quaternion.AngleAxis(paramList[0].twistFromParent, initialDirection);
-            rootShellObj.transform.rotation = roll * rotation;
+            Quaternion initialFacing = Quaternion.LookRotation(initialDirection, initialUp);
+            rootShellObj.transform.rotation = initialFacing;
             CapsuleCollider cc = rootShellObj.AddComponent<CapsuleCollider>();
             cc.direction = 2;
             rootShellObj.layer = 8;
@@ -230,6 +231,21 @@ namespace Telescopes
             // Make sure that all the shells fit inside each other.
             TelescopeUtils.growChainToFit(concreteParams);
 
+            MakeShellsFromFinalList(concreteParams);
+        }
+
+        public void MakeShellsFromConcrete(List<TelescopeParameters> concreteParams)
+        {
+            initNumShells = concreteParams.Count;
+            Debug.Log("num shells = " + initNumShells);
+            shells = new List<TelescopingShell>();
+            initialDirection.Normalize();
+
+            MakeShellsFromFinalList(concreteParams);
+        }
+
+        void MakeShellsFromFinalList(List<TelescopeParameters> concreteParams)
+        {
             // Construct all of the shells from this parameter list.
             MakeAllShells(concreteParams);
             concreteParameters = concreteParams;
@@ -240,9 +256,13 @@ namespace Telescopes
         // Use this for initialization
         void Awake()
         {
-            if (parameters != null)
+            if (parameters != null && paramMode == SegmentParametersMode.Diffs)
             {
                 MakeShellsFromDiffs(parameters);
+            }
+            else if (concreteParameters != null && paramMode == SegmentParametersMode.Concrete)
+            {
+                MakeShellsFromConcrete(parameters);
             }
         }
 
@@ -409,14 +429,15 @@ namespace Telescopes
                 + ", curvature " + curvature + ", twist " + twistFromParent; 
         }
 
-        public TelescopeParameters(float l, float r, float w, float c, float tors, float t)
+        public TelescopeParameters(float length, float radius, float thickness,
+            float curvature, float torsion, float twistImpulse)
         {
-            length = l;
-            radius = r;
-            thickness = w;
-            curvature = c;
-            torsion = tors;
-            twistFromParent = t;
+            this.length = length;
+            this.radius = radius;
+            this.thickness = thickness;
+            this.curvature = curvature;
+            this.torsion = torsion;
+            this.twistFromParent = twistImpulse;
         }
 
         public static TelescopeParameters operator +(TelescopeParameters t1, TelescopeParameters t2)
@@ -431,6 +452,7 @@ namespace Telescopes
             radius = toCopy.radius;
             thickness = toCopy.thickness;
             curvature = toCopy.curvature;
+            torsion = toCopy.torsion;
             twistFromParent = toCopy.twistFromParent;
         }
 
@@ -440,7 +462,13 @@ namespace Telescopes
             radius = baseParams.radius + diff.radius;
             thickness = baseParams.thickness;
             curvature = baseParams.curvature + diff.curvature;
+            torsion = baseParams.torsion + diff.torsion;
             twistFromParent = diff.twistFromParent;
         }
+    }
+
+    public enum SegmentParametersMode
+    {
+        Diffs, Concrete
     }
 }

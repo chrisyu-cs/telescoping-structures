@@ -61,6 +61,7 @@ namespace Telescopes.UI
             // Parameters for the entire telescope
             ts.initNumShells = EditorGUILayout.IntField("Number of Shells", ts.initNumShells);
             ts.initialDirection = EditorGUILayout.Vector3Field("Initial Direction", ts.initialDirection);
+            ts.initialUp = EditorGUILayout.Vector3Field("Initial Up", ts.initialUp);
             ts.wallThickness = EditorGUILayout.FloatField("Wall Thickness", ts.wallThickness);
 
             // Keep parameter list synced with shell count
@@ -96,6 +97,7 @@ namespace Telescopes.UI
                         ts.parameters[i].radius = EditorGUILayout.FloatField("Initial radius", ts.parameters[i].radius);
                         ts.parameters[i].curvature = EditorGUILayout.FloatField("Curvature", ts.parameters[i].curvature);
                         ts.parameters[i].twistFromParent = EditorGUILayout.FloatField("Twist angle", ts.parameters[i].twistFromParent);
+                        ts.parameters[i].torsion = EditorGUILayout.FloatField("Torsion", ts.parameters[i].torsion);
                     }
                     else
                     {
@@ -103,6 +105,7 @@ namespace Telescopes.UI
                         ts.parameters[i].radius = EditorGUILayout.FloatField("Radius change", ts.parameters[i].radius);
                         ts.parameters[i].curvature = EditorGUILayout.FloatField("Curvature change", ts.parameters[i].curvature);
                         ts.parameters[i].twistFromParent = EditorGUILayout.FloatField("Twist angle", ts.parameters[i].twistFromParent);
+                        ts.parameters[i].torsion = EditorGUILayout.FloatField("Torsion change", ts.parameters[i].torsion);
                     }
                     EditorGUILayout.Space();
                     EditorGUI.indentLevel--;

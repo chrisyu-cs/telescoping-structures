@@ -15,7 +15,7 @@ namespace Telescopes
         private int currentIndex;
 
         public float length, radius, thickness;
-        public float curvatureAmount;
+        public float curvature, torsion;
         public float twistAngle;
 
         public bool Reversed;
@@ -68,7 +68,7 @@ namespace Telescopes
 
         public TelescopeParameters getParameters()
         {
-            TelescopeParameters tp = new TelescopeParameters(length, radius, thickness, curvatureAmount, 0, twistAngle);
+            TelescopeParameters tp = new TelescopeParameters(length, radius, thickness, curvature, 0, twistAngle);
             return tp;
         }
 
@@ -79,8 +79,8 @@ namespace Telescopes
 
         public float radiansOfLength(float arcLength)
         {
-            if (curvatureAmount > 1e-6)
-                return arcLength * curvatureAmount;
+            if (curvature > 1e-6)
+                return arcLength * curvature;
             else return arcLength;
         }
 
@@ -109,7 +109,7 @@ namespace Telescopes
 
         public Vector3 translationOfDistance(float arcLength)
         {
-            return TelescopeUtils.translateAlongCircle(curvatureAmount, arcLength);
+            return TelescopeUtils.TranslateAlongHelix(curvature, torsion, arcLength);
         }
 
         public override void ExtendImmediate(float t)
@@ -119,7 +119,7 @@ namespace Telescopes
 
         public Quaternion getLocalRotationAlongPath(float t)
         {
-            if (curvatureAmount > 1e-6)
+            if (curvature > 1e-6)
             {
                 // Compute how many radians along the circle we moved.
                 float arcLength = t * length;
@@ -145,7 +145,7 @@ namespace Telescopes
 
         public Quaternion rotationOfDistance(float arcLength)
         {
-            return TelescopeUtils.rotateAlongCircle(curvatureAmount, arcLength);
+            return TelescopeUtils.RotateAlongHelix(curvature, torsion, arcLength);
         }
 
         public Vector3 getDirectionAlongPath(float t)
@@ -313,7 +313,8 @@ namespace Telescopes
             this.thickness = theParams.thickness;
             this.length = theParams.length;
             this.radius = theParams.radius;
-            this.curvatureAmount = theParams.curvature;
+            this.curvature = theParams.curvature;
+            this.torsion = theParams.torsion;
             this.twistAngle = theParams.twistFromParent;
 
             // Reset the mesh.
@@ -322,8 +323,8 @@ namespace Telescopes
 
             float slopeCosmetic = thickness * Constants.COSMETIC_TAPER_RATIO;
 
-            CylinderMesh outerCyl = GenerateCylinder(length, radius, curvatureAmount, slopeCosmetic + Constants.TAPER_SLOPE);
-            CylinderMesh innerCyl = GenerateCylinder(length, radius - thickness, curvatureAmount, Constants.TAPER_SLOPE);
+            CylinderMesh outerCyl = GenerateCylinder(length, radius, curvature, slopeCosmetic + Constants.TAPER_SLOPE);
+            CylinderMesh innerCyl = GenerateCylinder(length, radius - thickness, curvature, Constants.TAPER_SLOPE);
 
             // Flatten vertex list
             List<IndexedVertex> outerVerts = flattenList(outerCyl.circleCuts);

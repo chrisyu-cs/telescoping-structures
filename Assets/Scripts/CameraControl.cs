@@ -5,7 +5,6 @@ namespace Telescopes
 {
     public class CameraControl : MonoBehaviour
     {
-
         bool locked;
         private float theta, phi;
         public float translateSpeed = 2f;
@@ -13,6 +12,8 @@ namespace Telescopes
 
         private Rigidbody rb;
 
+        public FrenetTracer tracer;
+        
         // Use this for initialization
         void Start()
         {
@@ -53,6 +54,12 @@ namespace Telescopes
         void Update()
         {
             ProcessMove();
+
+            if (tracer)
+            {
+                transform.position = tracer.transform.position;
+                transform.rotation = tracer.transform.rotation;
+            }
         }
     }
 }
