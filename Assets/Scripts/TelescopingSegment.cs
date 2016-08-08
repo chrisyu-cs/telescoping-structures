@@ -375,6 +375,11 @@ namespace Telescopes
                 Reversed = ReversedOption;
             }
 
+            if (Input.GetKeyDown("enter"))
+            {
+                STLWriter.WriteSTLOfSegment(this, name + ".stl");
+            }
+
             if (rootSegment)
             {
                 if (Input.GetKeyDown("e"))

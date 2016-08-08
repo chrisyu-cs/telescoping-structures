@@ -29,3 +29,6 @@ sysinfo.txt
 
 # Gurobi log
 impulseQP.log
+
+# Output meshes
+*.stl

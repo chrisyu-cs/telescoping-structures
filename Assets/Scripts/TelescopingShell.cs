@@ -35,6 +35,11 @@ namespace Telescopes
 
         public TelescopingSegment containingSegment;
 
+        public Mesh mesh
+        {
+            get { return mFilter.mesh; }
+        }
+
         // Use this for initialization
         void Awake()
         {
@@ -459,6 +464,12 @@ namespace Telescopes
                 Vector3 axis = parent.transform.forward;
                 transform.RotateAround(parentWorld, axis, parent.twistAngle * twistT);
             }
+        }
+
+        public void WriteShell()
+        {
+            string name = this.name + ".stl";
+            STLWriter.WriteSTLOfMesh(mFilter.mesh, name);
         }
     }
 
