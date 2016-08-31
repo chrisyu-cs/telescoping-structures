@@ -62,16 +62,11 @@ namespace Telescopes
         // Update is called once per frame
         void Update()
         {
-            if (Input.GetKeyDown("h"))
+            /*
+            if (Input.GetKey("left shift") && Input.GetKeyDown("h"))
             {
                 highlightedNode.AddNewChild();
-            }
-
-            if (Input.GetKeyDown("p"))
-            {
-                NodeSerialized ns = new NodeSerialized(this);
-                ns.Print();
-            }
+            }*/
         }
 
         public void Save()

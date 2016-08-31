@@ -6,16 +6,16 @@ using MathNet.Numerics;
 using MathNet.Numerics.LinearAlgebra;
 using MathNet.Numerics.LinearAlgebra.Double;
 
-using Telescopes;
-using Gurobi;
 namespace Telescopes
 {
     [RequireComponent(typeof(LineRenderer))]
-    public class DiscreteCurve : MonoBehaviour
+    public partial class DiscreteCurve : MonoBehaviour, IParameterizedCurve
     {
         private Vector3 startingPoint;
-        private Vector3 startingDirection;
+        private Vector3 startingTangent;
         private Vector3 startingBinormal;
+
+        private Vector3 targetEndPoint;
 
         private List<Vector3> curvePoints;
         private List<DCurvePoint> discretizedPoints;
@@ -24,6 +24,9 @@ namespace Telescopes
         private LineRenderer lineRender;
 
         private FlowMode flowMode;
+
+        public DCurveBulb parentBulb;
+        public DCurveBulb childBulb;
 
         // Use this for initialization
         void Start()
@@ -43,8 +46,8 @@ namespace Telescopes
             segmentLength = segLength;
 
             startingPoint = points[0];
-            startingDirection = points[1] - points[0];
-            startingDirection.Normalize();
+            startingTangent = points[1] - points[0];
+            startingTangent.Normalize();
 
             discretizedPoints = new List<DCurvePoint>();
 
@@ -64,7 +67,9 @@ namespace Telescopes
                 if (i == 1) startingBinormal = curvatureBinormal;
 
                 // Compute bending angles (discrete curvature).
-                float bendAngle = Mathf.Rad2Deg * Mathf.Acos(Vector3.Dot(previousVec, nextVec));
+                float dot = Vector3.Dot(previousVec, nextVec);
+                float bendAngle = (dot > 0.9999f) ? 0 : Mathf.Rad2Deg * Mathf.Acos(dot);
+
                 // Compute twisting angles (discrete torsion).
                 float twistAngle;
                 // Compute twist angles as we go along.
@@ -76,26 +81,113 @@ namespace Telescopes
                     twistAngle = TelescopeUtils.AngleBetween(prevBinormal, curvatureBinormal, previousVec);
                 }
 
+                if (float.IsNaN(bendAngle)) throw new System.Exception("Bend angle is nan, dot = " + dot);
+                if (float.IsNaN(twistAngle)) throw new System.Exception("Twist angle is nan");
+
                 prevBinormal = curvatureBinormal;
 
                 DCurvePoint dcp = new DCurvePoint(curvatureBinormal.normalized,
-                    bendAngle, twistAngle, segmentLength);
+                    bendAngle, twistAngle);
 
                 discretizedPoints.Add(dcp);
             }
+
+            if (startingBinormal.magnitude < 0.001f)
+            {
+                if (startingTangent == Vector3.up)
+                    startingBinormal = Vector3.right;
+                else
+                {
+                    startingBinormal = Vector3.up;
+                    Vector3 orthogonal = Vector3.Dot(startingBinormal, startingTangent) * startingTangent;
+                    startingBinormal = startingBinormal - orthogonal;
+                    startingBinormal.Normalize();
+                }
+            }
+
+            targetEndPoint = ReconstructFromAngles();
+
+            ComputeFrenetFrames();
+            ComputeBishopFrames();
+        }
+
+        /// <summary>
+        /// Apply the given rotation to this entire curve.
+        /// </summary>
+        /// <param name="rotation"></param>
+        public void Rotate(Quaternion rotation)
+        {
+            startingTangent = rotation * startingTangent;
+            startingBinormal = rotation * startingBinormal;
+        }
+
+        void Scale(float factor)
+        {
+            segmentLength *= factor;
+        }
+
+        void RealignWithParentBulb()
+        {
+            if (parentBulb)
+            {
+                Vector3 parentCenter = parentBulb.transform.position;
+                Vector3 offset = parentBulb.radius * startingTangent;
+
+                Vector3 translation = (parentCenter + offset) - startingPoint;
+
+                startingPoint += translation;
+                targetEndPoint += translation;
+            }
+        }
+
+        /// <summary>
+        /// Apply the rotation and fix the base of this curve to originate
+        /// from the right point on the bulb.
+        /// </summary>
+        /// <param name="rotation"></param>
+        /// <param name="bulbCenter"></param>
+        /// <param name="radius"></param>
+        public void RotateAndOffset(Quaternion rotation, Vector3 bulbCenter, float radius)
+        {
+            Rotate(rotation);
+            startingPoint = bulbCenter + (radius * startingTangent);
 
             ReconstructFromAngles();
             ComputeFrenetFrames();
             ComputeBishopFrames();
         }
 
-        void ReconstructFromAngles()
+        public Vector3 StartTangent
+        {
+            get
+            {
+                return startingTangent;
+            }
+        }
+
+        public Vector3 EndTangent
+        {
+            get
+            {
+                return discretizedPoints[discretizedPoints.Count - 1].tangent;
+            }
+        }
+
+        public Vector3 EndPosition
+        {
+            get
+            {
+                return curvePoints[curvePoints.Count - 1];
+            }
+        }
+
+        Vector3 ReconstructFromAngles()
         {
             curvePoints = new List<Vector3>();
 
             Vector3 currentPoint = startingPoint;
             curvePoints.Add(currentPoint);
-            Vector3 currentDir = startingDirection;
+            Vector3 currentDir = startingTangent;
 
             currentPoint += currentDir * segmentLength;
             curvePoints.Add(currentPoint);
@@ -112,9 +204,40 @@ namespace Telescopes
                 Quaternion nextRot = Quaternion.AngleAxis(dcp.bendingAngle, currentBinormal);
                 currentDir = nextRot * currentDir;
                 currentPoint += currentDir * segmentLength;
+
+                if (float.IsNaN(currentPoint.x))
+                {
+                    Debug.Log("Binormal = " + currentBinormal);
+                    throw new System.Exception("NaN");
+                }
+
                 curvePoints.Add(currentPoint);
             }
             SetupLineRenderer();
+
+            return currentPoint;
+        }
+
+        void ReconstructAndAlign()
+        {
+            Vector3 currentEnd = ReconstructFromAngles();
+
+            Vector3 currentDir = (currentEnd - startingPoint).normalized;
+            Vector3 targetDir = targetEndPoint - startingPoint;
+            float targetLength = targetDir.magnitude;
+            targetDir /= targetLength;
+
+            Quaternion toTarget = Quaternion.FromToRotation(currentDir, targetDir);
+
+            Rotate(toTarget);
+
+            Vector3 rotatedEnd = ReconstructFromAngles();
+            float currentDist = Vector3.Distance(rotatedEnd, startingPoint);
+            float scaleFactor = targetLength / currentDist;
+
+            Scale(scaleFactor);
+            RealignWithParentBulb();
+            ReconstructFromAngles();
         }
 
         void SetupLineRenderer()
@@ -126,6 +249,7 @@ namespace Telescopes
 
         void ComputeFrenetFrames()
         {
+            if (discretizedPoints.Count <= 2) return;
             for (int i = 0; i < discretizedPoints.Count; i++)
             {
                 DCurvePoint dcp = discretizedPoints[i];
@@ -136,7 +260,9 @@ namespace Telescopes
                 }
                 else if (i == discretizedPoints.Count - 1)
                 {
-                    dcp.frenetFrame = discretizedPoints[i - 1].frenetFrame;
+                    Quaternion r = Quaternion.AngleAxis(discretizedPoints[i].bendingAngle,
+                        discretizedPoints[i - 1].frenetFrame.B);
+                    dcp.frenetFrame = discretizedPoints[i - 1].frenetFrame.RotatedBy(r);
                 }
                 else
                 {
@@ -145,10 +271,118 @@ namespace Telescopes
                     dcp.ComputeFrenet(prevPoint, nextPoint);
                 }
             }
+
+            FixFrenetFrames();
+        }
+
+        /// <summary>
+        /// Resolve points where the Frenet frame is undefined due to
+        /// the tangent being constant (i.e. zero derivative).
+        /// </summary>
+        void FixFrenetFrames()
+        {
+            // Find the index of the first valid frame.
+            int firstFrameIndex = -1;
+            for (int i = 0; i < discretizedPoints.Count; i++)
+            {
+                OrthonormalFrame frame = discretizedPoints[i].frenetFrame;
+                if (frame.B.magnitude > 0)
+                {
+                    firstFrameIndex = i;
+                    break;
+                }
+            }
+
+            // If there were no valid Frenet frames, then the entire curve is just
+            // a striaght line. We just assign an arbitrary
+            // frame aligned with the tangent for each one.
+            if (firstFrameIndex == -1)
+            {
+                Vector3 tangent = discretizedPoints[0].frenetFrame.T;
+                Vector3 normal, binormal;
+                // If the tangent is pointing up, use an orthogonal direction
+                if (tangent == Vector3.up)
+                {
+                    binormal = Vector3.right;
+                    normal = Vector3.Cross(binormal, tangent);
+                }
+                // Otherwise take some vector orthogonal to the tangent,
+                // by projecting the up direction onto it
+                else
+                {
+                    binormal = Vector3.up;
+                    binormal = binormal - Vector3.Dot(binormal, tangent) * tangent;
+                    binormal.Normalize();
+                    normal = Vector3.Cross(binormal, tangent);
+                }
+
+                OrthonormalFrame defaultFrame = new OrthonormalFrame(tangent, normal, binormal);
+
+                foreach (DCurvePoint dcp in discretizedPoints)
+                {
+                    dcp.frenetFrame = defaultFrame;
+                }
+            }
+
+            // Otherwise there is at least one valid frame, so propagate to all missing frames.
+            else
+            {
+                for (int i = 0; i < discretizedPoints.Count; i++)
+                {
+                    // If the current frame is invalid (has zero binormal), fix it
+                    if (discretizedPoints[i].frenetFrame.B.magnitude == 0)
+                    {
+                        if (i < firstFrameIndex) FixFrenetForward(i);
+                        else if (i > firstFrameIndex) FixFrenetBackward(i);
+                    }
+                }
+            }
+        }
+
+        void FixFrenetForward(int start)
+        {
+            int validIndex = start + 1;
+            // Search forward until we find a valid Frenet frame
+            while (discretizedPoints[validIndex].frenetFrame.B.magnitude == 0)
+            {
+                validIndex++;
+            }
+
+            // Un-rotate the valid frame so that it's aligned with the current tangent
+            OrthonormalFrame nextFrame = discretizedPoints[validIndex].frenetFrame;
+            Vector3 nextTangent = nextFrame.T;
+            Vector3 currentTangent = discretizedPoints[validIndex - 1].frenetFrame.T;
+            Quaternion reverseRotation = Quaternion.FromToRotation(nextTangent, currentTangent);
+            OrthonormalFrame backFrame = nextFrame.RotatedBy(reverseRotation);
+
+            // Set the aligned frame to all of the points missing frames
+            for (int i = start; i < validIndex; i++)
+            {
+                discretizedPoints[i].frenetFrame = backFrame;
+            }
+        }
+
+        void FixFrenetBackward(int start)
+        {
+            // Find the most recent valid frame
+            int validIndex = start - 1;
+            while (discretizedPoints[validIndex].frenetFrame.B.magnitude == 0)
+            {
+                validIndex--;
+            }
+
+            OrthonormalFrame validFrame = discretizedPoints[validIndex].frenetFrame;
+
+            // No need to un-rotate because the tangents are already aligned.
+            for (int i = start; i > validIndex; i--)
+            {
+                discretizedPoints[i].frenetFrame = validFrame;
+            }
         }
 
         void ComputeBishopFrames()
         {
+            if (discretizedPoints.Count <= 2) return;
             for (int i = 0; i < discretizedPoints.Count; i++)
             {
                 DCurvePoint dcp = discretizedPoints[i];
@@ -173,6 +407,7 @@ namespace Telescopes
 
         void CurvatureFlow(float delta)
         {
+            if (discretizedPoints.Count <= 2) return;
             if (laplacianBE == null)
             {
                 Matrix<double> laplacian = NumericalUtils.SpaceCurveLaplacian(discretizedPoints.Count);
@@ -186,7 +421,7 @@ namespace Telescopes
             {
                 discretizedPoints[i].bendingAngle = (float)solved[i];
             }
-            ReconstructFromAngles();
+            ReconstructAndAlign();
         }
 
         void CurvatureToAverage()
@@ -201,11 +436,12 @@ namespace Telescopes
             {
                 dcp.bendingAngle = averageAngle;
             }
-            ReconstructFromAngles();
+            ReconstructAndAlign();
         }
 
         void TorsionFlow(float delta)
         {
+            if (discretizedPoints.Count <= 2) return;
             if (laplacianBE == null)
             {
                 Matrix<double> laplacian = NumericalUtils.SpaceCurveLaplacian(discretizedPoints.Count);
@@ -219,7 +455,7 @@ namespace Telescopes
             {
                 discretizedPoints[i].twistingAngle = (float)(solved[i]);
             }
-            ReconstructFromAngles();
+            ReconstructAndAlign();
         }
 
         void TorsionToAverage()
@@ -234,17 +470,21 @@ namespace Telescopes
             {
                 discretizedPoints[i].twistingAngle = averageAngle;
             }
-            ReconstructFromAngles();
+            ReconstructAndAlign();
         }
 
         // Update is called once per frame
         void Update()
         {
-
-            if (Input.GetKeyDown("l"))
+            if (Input.GetKey("left shift") && Input.GetKeyDown("j"))
             {
-                bool isShiftKeyDown = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-                if (isShiftKeyDown)
+                SegmentCurvature();
+            }
+
+            if (Input.GetKey("left shift") && Input.GetKeyDown("l"))
+            {
+                bool isCtrlKeyDown = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+                if (isCtrlKeyDown)
                 {
                     CurvatureToAverage();
                     ComputeFrenetFrames();
@@ -257,9 +497,9 @@ namespace Telescopes
                 }
             }
 
-            else if (Input.GetKeyDown("k"))
+            else if (Input.GetKey("left shift") && Input.GetKeyDown("k"))
             {
-                bool isShiftKeyDown = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+                bool isShiftKeyDown = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
                 if (isShiftKeyDown)
                 {
                     TorsionToAverage();
@@ -271,19 +511,6 @@ namespace Telescopes
                     if (flowMode != FlowMode.TorsionFlow) flowMode = FlowMode.TorsionFlow;
                     else flowMode = FlowMode.None;
                 }
-            }
-
-            else if (Input.GetKeyDown("o"))
-            {
-                bool isShiftKeyDown = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-
-                List<float> points = EvenlySpacedPoints(DesignerController.instance.numImpulses);
-                if (isShiftKeyDown)
-                {
-                    if (DesignerController.instance.UseSparseSolve) SolveImpulseLPSparse(points);
-                    else SolveImpulseLP(points);
-                }
-                else SolveImpulsesQP(points);
             }
 
             if (flowMode == FlowMode.CurvatureFlow)
@@ -301,6 +528,25 @@ namespace Telescopes
             }
         }
 
+        public TorsionImpulseCurve MakeCurve()
+        {
+            bool isShiftKeyDown = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+
+            List<float> points = EvenlySpacedPoints(DesignerController.instance.numImpulses);
+            if (isShiftKeyDown)
+            {
+                if (DesignerController.instance.UseSparseSolve) return SolveImpulseLPSparse(points);
+                else
+                {
+                    var tup = SolveImpulseLP(points, makeCurve: false);
+                    float slope = tup.Item1;
+                    List<float> impulses = tup.Item2;
+                    return MakeTorsionImpulseCurve(impulses, points, slope);
+                }
+            }
+            else return SolveImpulsesQP(points);
+        }
+
         List<float> EvenlySpacedPoints(int num)
         {
             float step = ArcLength / num;
@@ -316,7 +562,7 @@ namespace Telescopes
 
         public float ArcLength
         {
-            get { return discretizedPoints.Count * segmentLength; }
+            get { return (discretizedPoints.Count + 1) * segmentLength; }
         }
 
         void ScaleArcParameter(out int segNum, out float scaledT, float arcT)
@@ -405,14 +651,15 @@ namespace Telescopes
         {
             float averageCurvature = AverageCurvature();
 
-            Vector3 startingNormal = Vector3.Cross(startingBinormal, startingDirection);
-            OrthonormalFrame startFrame = new OrthonormalFrame(startingDirection, startingNormal, startingBinormal);
+            Vector3 startingNormal = Vector3.Cross(startingBinormal, startingTangent);
+            OrthonormalFrame startFrame = new OrthonormalFrame(startingTangent, startingNormal, startingBinormal);
 
+            /*
             TorsionImpulseCurve[] old = FindObjectsOfType<TorsionImpulseCurve>();
             foreach (TorsionImpulseCurve g in old)
             {
                 Destroy(g.gameObject);
-            }
+            }*/
 
             List<float> arcSteps = new List<float>();
             for (int i = 0; i < arcPoints.Count - 1; i++)
@@ -420,350 +667,20 @@ namespace Telescopes
                 arcSteps.Add(arcPoints[i + 1] - arcPoints[i]);
             }
 
+            Debug.Log("Frame: " + startingTangent + ", " + startingNormal + ", " + startingBinormal);
+
             GameObject obj = new GameObject();
             obj.name = "TorsionApproxCurve";
             TorsionImpulseCurve impulseCurve = obj.AddComponent<TorsionImpulseCurve>();
             impulseCurve.InitFromData(impulses, arcSteps,
                 averageCurvature, constTorsion,
-                startFrame, discretizedPoints[0].position);
+                startFrame, startingPoint);
 
             impulseCurve.SetMaterial(lineRender.material);
 
             return impulseCurve;
         }
 
-        public void SolveImpulsesQP(List<float> arcPoints)
-        {
-            // ====================== BEGIN LP ======================= //
-            GRBEnv env = new GRBEnv("impulseQP.log");
-            GRBModel model = new GRBModel(env);
-
-            List<GRBVar> sigma = new List<GRBVar>();
-
-            GRBVar slope = model.AddVar(Constants.QP_LOWER_BOUND, Constants.QP_UPPER_BOUND,
-                0, GRB.CONTINUOUS, "slope");
-
-            // Make the variables.
-            // We use the cumulative torsion values at each separating point as the variables,
-            // because this simplifies computing the error functions later.
-            for (int i = 1; i < arcPoints.Count - 1; i++)
-            {
-                GRBVar v = model.AddVar(Constants.QP_LOWER_BOUND, Constants.QP_UPPER_BOUND,
-                    0, GRB.CONTINUOUS, "sigma" + i);
-                sigma.Add(v);
-            }
-
-            List<GRBVar> absDiffsPlus = new List<GRBVar>();
-            List<GRBVar> absDiffsMinus = new List<GRBVar>();
-
-            // Made variables that will represent absolute values of diffs.
-            for (int i = 0; i < sigma.Count; i++)
-            {
-                GRBVar vPlus = model.AddVar(0, Constants.QP_UPPER_BOUND,
-                    0, GRB.CONTINUOUS, "diff" + i + "+");
-                GRBVar vMinus = model.AddVar(0, Constants.QP_UPPER_BOUND,
-                    0, GRB.CONTINUOUS, "diff" + i + "-");
-                absDiffsPlus.Add(vPlus);
-                absDiffsMinus.Add(vMinus);
-            }
-
-            model.Update();
-
-            // Add constraints that will define the plus and minus vars
-            // as absolute values.
-            for (int i = 0; i < absDiffsMinus.Count; i++)
-            {
-                GRBVar vPlus = absDiffsPlus[i];
-                GRBVar vMinus = absDiffsMinus[i];
-                GRBLinExpr expectedTwist;
-                float segLength = arcPoints[i + 1] - arcPoints[i];
-                if (i == 0) expectedTwist = slope * segLength;
-                else expectedTwist = sigma[i - 1] + slope * segLength;
-                GRBLinExpr diff = sigma[i] - expectedTwist;
-
-                GRBTempConstr tempConstr = (diff == vPlus - vMinus);
-                model.AddConstr(tempConstr, "diffConstr" + i);
-            }
-
-            GRBQuadExpr objective = 0;
-
-            float cumulativeTwist = 0;
-
-            // Add least squares error component.
-            // This is the sum of all squared differences
-            // between our data points and the reconstructed function.
-            for (int i = 0; i < discretizedPoints.Count; i++)
-            {
-                cumulativeTwist += Mathf.Deg2Rad * discretizedPoints[i].twistingAngle;
-                float arcPosition = i * segmentLength;
-
-                // Find the last arc point that comes before the sample point
-                int stepNum = 0;
-                for (int j = 0; j < arcPoints.Count; j++)
-                {
-                    if (arcPoints[j] > arcPosition) break;
-                    stepNum = j;
-                }
-                // Find the distance past the most recent impulse point.
-                float arcDistanceFromPt = arcPosition - arcPoints[stepNum];
-                // Implicitly sigma_0 = 0, so the error contribution here
-                // is just the difference from the segments starting at 0.
-                GRBQuadExpr error;
-                GRBLinExpr sigma_slope;
-                if (stepNum == 0)
-                {
-                    sigma_slope = 0 + slope * arcDistanceFromPt;
-                }
-                // Otherwise we use sigma_j as the starting point.
-                else
-                {
-                    // We didn't include sigma_0 in the list, 
-                    // so actually sigma_1 = sigma[0].
-                    int j = stepNum - 1;
-                    sigma_slope = sigma[j] + slope * arcDistanceFromPt;
-                }
-                error = (cumulativeTwist - sigma_slope) * (cumulativeTwist - sigma_slope);
-                objective.Add(error);
-            }
-
-            // Add L1 terms to encourage sparsity if enabled
-            if (DesignerController.instance.UseSparseSolve)
-            {
-                for (int i = 0; i < absDiffsMinus.Count; i++)
-                {
-                    objective.AddTerm(1, absDiffsMinus[i]);
-                    objective.AddTerm(1, absDiffsPlus[i]);
-                }
-            }
-
-            model.SetObjective(objective);
-            model.Optimize();
-            // ====================== END LP ======================= //
-
-            for (int i = 0; i < absDiffsMinus.Count; i++)
-            {
-                double min = System.Math.Min(absDiffsMinus[i].Get(GRB.DoubleAttr.X),
-                    absDiffsPlus[i].Get(GRB.DoubleAttr.X));
-                //if (min > 1e-8) throw new System.Exception("ERROR: Absolute value was not zero");
-            }
-
-            // Read out the recommended constant torsion
-            float constTorsion = (float)slope.Get(GRB.DoubleAttr.X);
-
-            // Read out the resulting impulses by computing differences
-            List<float> impulses = new List<float>();
-            impulses.Add(0);
-            double expectedInitial = arcPoints[1] * constTorsion;
-            double initDiff = sigma[0].Get(GRB.DoubleAttr.X) - expectedInitial;
-            impulses.Add((float)initDiff);
-
-            double sumImpulses = 0;
-            int numNonzeroImpulses = 0;
-
-            for (int i = 1; i < sigma.Count; i++)
-            {
-                double arcStep = arcPoints[i + 1] - arcPoints[i];
-                double expectedI = sigma[i - 1].Get(GRB.DoubleAttr.X) + arcStep * constTorsion;
-                double diff = sigma[i].Get(GRB.DoubleAttr.X) - expectedI;
-                if (System.Math.Abs(diff) > 1e-6)
-                {
-                    numNonzeroImpulses++;
-                    sumImpulses += System.Math.Abs(diff);
-                }
-                // Debug.Log("Impulse " + i + " = " + diff);
-                impulses.Add((float)diff);
-            }
-            double averageImpulse = sumImpulses / impulses.Count;
-
-            Debug.Log(numNonzeroImpulses + " non-zero impulses (sparse QP)");
-            
-            var t = MakeTorsionImpulseCurve(impulses, arcPoints, constTorsion);
-            t.SetColor(Color.cyan);
-        }
-
-        delegate double RealFunction(double x);
-
-        /// <summary>
-        /// Compute the definite integral of a function between the two given bounds,
-        /// using a trapezoidal rule approximation.
-        /// </summary>
-        /// <param name="intervalStart"></param>
-        /// <param name="intervalEnd"></param>
-        /// <param name="f"></param>
-        /// <param name="numSlices"></param>
-        /// <returns></returns>
-        double DefiniteIntegral(double intervalStart, double intervalEnd, RealFunction f, int numSlices = 100)
-        {
-            double sum = 0;
-            double step = (intervalEnd - intervalStart) / numSlices;
-            for (int i = 0; i < numSlices; i++)
-            {
-                double start = intervalStart + step * i;
-                double end = intervalStart + step * (i + 1);
-
-                double average = (f(start) + f(end)) / 2;
-                sum += average * step;
-            }
-            return sum;
-        }
-
-        delegate float TwistFunction(int index);
-
-        double InterpolateTorsion(double arcPosition)
-        {
-            TwistFunction TwistOfIndex = (i => discretizedPoints[i].cumulativeTwist);
-            int pointBefore = Mathf.FloorToInt((float)arcPosition / segmentLength);
-            int pointAfter = Mathf.CeilToInt((float)arcPosition / segmentLength);
-
-            if (pointBefore == pointAfter)
-            {
-                int i = Mathf.Clamp(pointBefore, 0, discretizedPoints.Count - 1);
-                return TwistOfIndex(i);
-            }
-            if (pointBefore < 0) return TwistOfIndex(0);
-            if (pointAfter >= discretizedPoints.Count) return TwistOfIndex(discretizedPoints.Count - 1);
-
-            float interpFactor = (float)arcPosition - (pointBefore * segmentLength);
-            float prevTwist = TwistOfIndex(pointBefore);
-            float nextTwist = TwistOfIndex(pointAfter);
-
-            return (1 - interpFactor) * prevTwist + interpFactor * nextTwist;
-        }
-
-        public void SolveImpulseLPSparse(List<float> arcPoints)
-        {
-            float ratio = 0;
-            float slope = 0;
-            List<float> impulses;
-            List<float> sparsePoints = new List<float>(arcPoints);
-
-            float cutoffThreshold = 0.5f;
-            do
-            {
-                Tuple<float, List<float>> results = SolveImpulseLP(sparsePoints, makeCurve: false);
-                slope = results.Item1;
-                impulses = results.Item2;
-
-                float average = 0;
-                float min = Mathf.Abs(impulses[1]);
-                // The first impulse is always 0 so ignore it.
-                int minIndex = 0;
-                for (int i = 1; i < impulses.Count; i++)
-                {
-                    average += Mathf.Abs(impulses[i]);
-                    float nextImpulse = Mathf.Abs(impulses[i]);
-                    if (nextImpulse < min)
-                    {
-                        min = nextImpulse;
-                        minIndex = i;
-                    }
-                }
-                average /= impulses.Count;
-                ratio = min / average;
-                if (ratio < cutoffThreshold) sparsePoints.RemoveAt(minIndex);
-            }
-            while (ratio < cutoffThreshold);
-
-            Debug.Log(impulses.Count + " impulses (sparse LP)");
-
-            TorsionImpulseCurve t = MakeTorsionImpulseCurve(impulses, sparsePoints, slope);
-            t.SetColor(Color.magenta);
-        }
-
-        public Tuple<float, List<float>> SolveImpulseLP(List<float> arcPoints, bool makeCurve = true)
-        {
-            float cumulative = 0;
-
-            // Compute the cumulative torsion at each point
-            for (int i = 0; i < discretizedPoints.Count; i++)
-            {
-                cumulative += Mathf.Deg2Rad * discretizedPoints[i].twistingAngle;
-                discretizedPoints[i].cumulativeTwist = cumulative;
-            }
-
-            List<double> integralsPhi = new List<double>();
-            List<double> integralsXPhi = new List<double>();
-
-            TwistFunction T = (i => discretizedPoints[i].cumulativeTwist);
-
-            for (int i = 0; i < arcPoints.Count - 1; i++)
-            {
-                float intervalStart = arcPoints[i];
-                float intervalEnd = arcPoints[i + 1];
-
-                RealFunction phi = InterpolateTorsion;
-                RealFunction xPhi = (x => x * InterpolateTorsion(x));
-
-                double integralPhi = DefiniteIntegral(intervalStart, intervalEnd, phi);
-                double integralXPhi = DefiniteIntegral(intervalStart, intervalEnd, xPhi);
-
-                integralsPhi.Add(integralPhi);
-                integralsXPhi.Add(integralXPhi);
-            }
-
-            List<Tuple<int, int, double>> triples = new List<Tuple<int, int, double>>();
-            List<double> rhsList = new List<double>();
-            // Add a placeholder for now
-            rhsList.Add(0);
-            
-            double sum_hi3 = 0;
-            double sum_di = 0;
-
-            for (int i = 1; i < arcPoints.Count - 1; i++)
-            {
-                // Compute all the relevant values
-                double x_i = arcPoints[i];
-                double x_i1 = arcPoints[i + 1];
-
-                double h_i1 = x_i1 - x_i;
-                double h_i2 = (x_i1 * x_i1) - (x_i * x_i);
-                double h_i3 = (x_i1 * x_i1 * x_i1) - (x_i * x_i * x_i);
-                double c_i = integralsPhi[i];
-                double d_i = integralsXPhi[i];
-
-                // The constraint in row i only involves the variables a (column 0) and b_i (column i).
-                triples.Add(new Tuple<int, int, double>(i, 0, 0.5 * h_i2));
-                triples.Add(new Tuple<int, int, double>(i, i, h_i1));
-                rhsList.Add(c_i);
-
-                sum_di += d_i;
-                sum_hi3 += h_i3 / 3.0;
-
-                // Also add the coefficient for b_i in the row 0 constraint
-                triples.Add(new Tuple<int, int, double>(0, i, 0.5 * h_i2));
-            }
-            // Set right side of constraint 0 to be sum_{i=1}^k d_i
-            rhsList[0] = sum_di;
-            // Set coefficient of a in constraint 0 to be 1/3 sum_{i=1}^k h_i3
-            triples.Add(new Tuple<int, int, double>(0, 0, sum_hi3));
-
-            Matrix<double> mat = SparseMatrix.OfIndexed(arcPoints.Count - 1, arcPoints.Count - 1, triples);
-            
-            Vector<double> rhs = Vector.Build.DenseOfEnumerable(rhsList);
-            Vector<double> solved = mat.Solve(rhs);
-
-            double slope = solved[0];
-
-            List<float> impulses = new List<float>();
-            impulses.Add(0);
-            
-            for(int i = 1; i < solved.Count; i++)
-            {
-                double prev = (i == 1) ? 0 : solved[i - 1];
-                double diff = solved[i] - prev;
-
-                // Debug.Log("Impulse " + i + " = " + diff);
-                impulses.Add((float)diff);
-            }
-
-            if (makeCurve)
-            {
-                TorsionImpulseCurve t = MakeTorsionImpulseCurve(impulses, arcPoints, (float)slope);
-                t.SetColor(Color.magenta);
-            }
-
-            return new Tuple<float, List<float>>((float)slope, impulses);
-        }
     }
 
     public enum FlowMode
@@ -778,7 +695,6 @@ namespace Telescopes
         /// </summary>
         public Vector3 binormal;
         public float bendingAngle;
-        public float segmentLength;
 
         public float twistingAngle;
 
@@ -794,12 +710,11 @@ namespace Telescopes
         public OrthonormalFrame frenetFrame;
         public OrthonormalFrame bishopFrame;
 
-        public DCurvePoint(Vector3 dir, float bendAngle, float twistAngle, float len)
+        public DCurvePoint(Vector3 dir, float bendAngle, float twistAngle)
         {
             binormal = dir;
             bendingAngle = bendAngle;
             twistingAngle = twistAngle;
-            segmentLength = len;
         }
 
         public void ComputeFrenet(Vector3 prevPos, Vector3 nextPos)
@@ -807,6 +722,7 @@ namespace Telescopes
             Vector3 tangent = (nextPos - position).normalized;
             Vector3 prevTangent = (position - prevPos).normalized;
             Vector3 binormal = Vector3.Cross(prevTangent, tangent).normalized;
+
             Vector3 normal = Vector3.Cross(binormal, tangent);
 
             frenetFrame = new OrthonormalFrame(tangent, normal, binormal);

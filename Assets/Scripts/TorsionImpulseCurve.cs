@@ -4,17 +4,29 @@ using System.Collections.Generic;
 namespace Telescopes
 {
     [RequireComponent(typeof(LineRenderer))]
-    public class TorsionImpulseCurve : MonoBehaviour
+    public class TorsionImpulseCurve : MonoBehaviour, IParameterizedCurve
     {
         List<CurveSegment> segments;
         LineRenderer lRenderer;
 
         List<Vector3> displayPoints;
 
+        public DCurveBulb StartBulb;
+        public DCurveBulb EndBulb;
+
+        public int NumSegments { get { return segments.Count; } }
+
         public void InitFromData(List<float> impulses, List<float> arcSteps,
             float curvature, float torsion,
             OrthonormalFrame initialFrame, Vector3 initialPos)
         {
+            if (initialFrame.T.magnitude < 0.01f
+                || initialFrame.B.magnitude < 0.01f
+                || initialFrame.N.magnitude < 0.01f) {
+
+                throw new System.Exception("Initial frame has zeroes");
+            }
+
             displayPoints = new List<Vector3>();
             lRenderer = GetComponent<LineRenderer>();
             segments = new List<CurveSegment>();
@@ -54,6 +66,120 @@ namespace Telescopes
             lRenderer.SetVertexCount(displayPoints.Count);
             lRenderer.SetPositions(displayPoints.ToArray());
             lRenderer.SetWidth(0.1f, 0.1f);
+        }
+
+        public Vector3 StartTangent
+        {
+            get
+            {
+                return segments[0].frame.T;
+            }
+        }
+
+        public Vector3 EndTangent
+        {
+            get
+            {
+                CurveSegment last = segments[segments.Count - 1];
+                OrthonormalFrame endFrame = TransformedHelixFrame(last, last.arcLength);
+                return endFrame.T;
+            }
+        }
+
+        public Vector3 EndPosition
+        {
+            get
+            {
+                CurveSegment last = segments[segments.Count - 1];
+                Vector3 endPos = TransformedHelixPoint(last, last.arcLength);
+                return endPos;
+            }
+        }
+
+        /// <summary>
+        /// Rotate this entire curve by the given rotation.
+        /// </summary>
+        /// <param name="rotation"></param>
+        public void Rotate(Quaternion rotation)
+        {
+            OrthonormalFrame initFrame = segments[0].frame.RotatedBy(rotation);
+            CurveSegment initSegment = segments[0];
+            initSegment.frame = initFrame;
+            segments[0] = initSegment;
+
+            CurveSegment prevHelix = segments[0];
+            float len = prevHelix.arcLength;
+            
+            displayPoints.Clear();
+            AddPointsOfSegment(prevHelix);
+
+            for (int i = 1; i < segments.Count; i++)
+            {
+                // New start point is the end of the previous curve segment.
+                Vector3 newBase = TransformedHelixPoint(prevHelix, prevHelix.arcLength);
+                // New frame is the frame rotated to the end of the segment.
+                OrthonormalFrame newFrame = TransformedHelixFrame(prevHelix, prevHelix.arcLength);
+
+                // Apply the torsion impulse as well.
+                Quaternion impulseRot = Quaternion.AngleAxis(Mathf.Rad2Deg * segments[i].impulse, newFrame.T);
+                newFrame = newFrame.RotatedBy(impulseRot);
+
+                prevHelix = new CurveSegment(newBase, segments[i].curvature, segments[i].torsion,
+                    segments[i].impulse, segments[i].arcLength, newFrame);
+
+                len += segments[i].arcLength;
+
+                AddPointsOfSegment(prevHelix);
+                segments[i] = prevHelix;
+            }
+
+            // Add the last point of the last curve
+            displayPoints.Add(TransformedHelixPoint(prevHelix, prevHelix.arcLength));
+
+            // Set up line renderer
+            lRenderer.SetVertexCount(displayPoints.Count);
+            lRenderer.SetPositions(displayPoints.ToArray());
+            lRenderer.SetWidth(0.1f, 0.1f);
+        }
+
+        /// <summary>
+        /// Translates this entire curve by the given vector.
+        /// </summary>
+        /// <param name="offset"></param>
+        public void Translate(Vector3 offset)
+        {
+            for (int i = 0; i < segments.Count; i++)
+            {
+                CurveSegment cs = segments[i];
+                cs.startPosition += offset;
+                segments[i] = cs;
+            }
+
+            displayPoints.Clear();
+
+            foreach (CurveSegment seg in segments)
+            {
+                AddPointsOfSegment(seg);
+            }
+
+            CurveSegment last = segments[segments.Count - 1];
+
+            // Add the last point of the last curve
+            displayPoints.Add(TransformedHelixPoint(last, last.arcLength));
+
+            // Set up line renderer
+            lRenderer.SetVertexCount(displayPoints.Count);
+            lRenderer.SetPositions(displayPoints.ToArray());
+            lRenderer.SetWidth(0.1f, 0.1f);
+        }
+
+        public void RotateAndOffset(Quaternion rotation, Vector3 bulbCenter, float radius)
+        {
+            Rotate(rotation);
+            Vector3 currentStart = segments[0].startPosition;
+            Vector3 desired = bulbCenter + (radius * StartTangent);
+            Vector3 offset = desired - currentStart;
+            Translate(offset);
         }
 
         public void SetMaterial(Material mat)
@@ -101,7 +227,7 @@ namespace Telescopes
             return world;
         }
 
-        void MakeTelescope(float startRadius)
+        public TelescopingSegment MakeTelescope(float startRadius)
         {
             List<TelescopeParameters> tParams = new List<TelescopeParameters>();
 
@@ -140,6 +266,8 @@ namespace Telescopes
             segment.initialUp = segments[0].frame.N;
 
             segment.MakeShellsFromConcrete(tParams);
+
+            return segment;
         }
 
         DiscreteCurve ToDiscreteCurve()
@@ -164,12 +292,7 @@ namespace Telescopes
 
         void Update()
         {
-            if (Input.GetKeyDown("i"))
-            {
-                MakeTelescope(segments.Count * Constants.DEFAULT_WALL_THICKNESS + 0.1f);
-            }
-
-            if (Input.GetKeyDown("u"))
+            if (Input.GetKey("left shift") && Input.GetKeyDown("u"))
             {
                 ToDiscreteCurve();
             }

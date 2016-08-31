@@ -11,8 +11,6 @@ namespace Telescopes
         public float rotateSpeed = 2f;
 
         private Rigidbody rb;
-
-        public FrenetTracer tracer;
         
         // Use this for initialization
         void Start()
@@ -54,12 +52,6 @@ namespace Telescopes
         void Update()
         {
             ProcessMove();
-
-            if (tracer)
-            {
-                transform.position = tracer.transform.position;
-                transform.rotation = tracer.transform.rotation;
-            }
         }
     }
 }

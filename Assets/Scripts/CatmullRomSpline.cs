@@ -6,6 +6,8 @@ namespace Telescopes
     [RequireComponent(typeof(LineRenderer))]
     public class CatmullRomSpline : MonoBehaviour
     {
+        public CatmullRomSpline parent;
+        public List<CatmullRomSpline> children;
 
         public List<Vector3> points;
         private List<CatmullRomSegment> segments;
@@ -14,12 +16,36 @@ namespace Telescopes
         public int pointsPerSegment = 20;
 
         private bool needsUpdate = false;
-        public bool randomize = true;
+        public bool randomize = false;
+
+        private List<DraggablePoint> spheres;
+
+        public SplineCanvas containingCanvas;
+
+        public DraggablePoint StartBulb;
+        public DraggablePoint EndBulb;
+
+        public int NumSegments { get { return segments.Count; } }
+
+        void Awake()
+        {
+            children = new List<CatmullRomSpline>();
+            lineRender = GetComponent<LineRenderer>();
+
+            lineRender.SetWidth(0.1f, 0.1f);
+        }
 
         // Use this for initialization
         void Start()
         {
-            if (points.Count < 4) return;
+            segments = new List<CatmullRomSegment>();
+            spheres = new List<DraggablePoint>();
+
+            if (points.Count < 4)
+            {
+                createSpheres();
+                return;
+            }
 
             if (randomize)
             {
@@ -30,8 +56,42 @@ namespace Telescopes
                 }
             }
 
-            segments = new List<CatmullRomSegment>();
+            SetMaterial(DesignerController.instance.defaultLineMaterial);
 
+            makeSegments();
+            updateRenderPoints();
+            createSpheres();
+        }
+
+        public void DeletePoint(int index)
+        {
+            if (points.Count <= 1) return;
+            points.RemoveAt(index);
+            makeSegments();
+            updateRenderPoints();
+            createSpheres();
+        }
+
+        public void DuplicatePoint(int index)
+        {
+            Vector3 pointToDuplicate = points[index];
+            // Add a slight offset to differentiate the two
+            pointToDuplicate.y += 0.1f;
+            points.Insert(index, pointToDuplicate);
+
+            makeSegments();
+            updateRenderPoints();
+            createSpheres();
+        }
+
+        public void SetMaterial(Material m)
+        {
+            lineRender.material = m;
+        }
+
+        void makeSegments()
+        {
+            segments.Clear();
             for (int i = 0; i < points.Count - 3; i++)
             {
                 Vector3 p0 = points[i];
@@ -41,41 +101,99 @@ namespace Telescopes
 
                 segments.Add(new CatmullRomSegment(p0, p1, p2, p3));
             }
+        }
 
-            lineRender = GetComponent<LineRenderer>();
+        void FixSegmentsAroundIndex(int index)
+        {
+            int lowerBound = Mathf.Max(0, index - 3);
+            int upperBound = Mathf.Min(index, points.Count - 4);
+
+            for (int i = lowerBound; i <= upperBound; i++)
+            {
+                Vector3 p0 = points[i];
+                Vector3 p1 = points[i + 1];
+                Vector3 p2 = points[i + 2];
+                Vector3 p3 = points[i + 3];
+                segments[i].ResetPositions(p0, p1, p2, p3);
+            }
+        }
+
+        public void UpdatePosition(int index, Vector3 newPosition)
+        {
+            Vector3 offset = newPosition - points[index];
+
+            points[index] = newPosition;
+            FixSegmentsAroundIndex(index);
+
+            if (points.Count >= 4)
+            {
+                if (index == 1)
+                {
+                    points[0] += offset;
+                    FixSegmentsAroundIndex(0);
+                    spheres[0].transform.position = points[0];
+                }
+                else if (index == points.Count - 2)
+                {
+                    points[points.Count - 1] += offset;
+                    FixSegmentsAroundIndex(points.Count - 1);
+                    spheres[points.Count - 1].transform.position = points[points.Count - 1];
+                }
+            }
 
             updateRenderPoints();
-            createSpheres();
         }
 
         void updateRenderPoints()
         {
-            List<Vector3> points = new List<Vector3>();
+            if (segments.Count <= 0) return;
+            List<Vector3> renderPoints = new List<Vector3>();
+
             for (int i = 0; i < segments.Count; i++)
             {
-                segments[i].addSamplePointsTo(points, pointsPerSegment);
+                segments[i].addSamplePointsTo(renderPoints, pointsPerSegment);
             }
-            segments[segments.Count - 1].addLastPointTo(points);
+            segments[segments.Count - 1].addLastPointTo(renderPoints);
 
-            lineRender.SetVertexCount(points.Count);
-            lineRender.SetPositions(points.ToArray());
+            lineRender.SetVertexCount(renderPoints.Count);
+            lineRender.SetPositions(renderPoints.ToArray());
 
             needsUpdate = false;
         }
 
+        public DraggablePoint GetSphere(int i)
+        {
+            return spheres[i];
+        }
+
         void createSpheres()
         {
-            foreach (var p in points)
+            foreach (DraggablePoint p in spheres)
+            {
+                Destroy(p.gameObject);
+            }
+            spheres.Clear();
+
+            for (int i = 0; i < points.Count; i++)
             {
                 GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                obj.name = "splineMarker";
+                obj.name = "splineMarker" + i;
                 obj.transform.localScale = new Vector3(0.1f, 0.1f, 0.1f);
-                obj.transform.position = p;
+                obj.transform.position = points[i];
                 obj.transform.parent = transform;
+
+                obj.AddComponent<SphereCollider>();
+                DraggablePoint draggable = obj.AddComponent<DraggablePoint>();
+                draggable.index = i;
+                draggable.parentSpline = this;
+                draggable.containingCanvas = containingCanvas;
+                draggable.Type = PointType.Spline;
+
+                spheres.Add(draggable);
             }
         }
 
-        Vector3 sample(float t)
+        public Vector3 sample(float t)
         {
             int segNum = Mathf.FloorToInt(t);
             if (segNum >= segments.Count)
@@ -84,6 +202,27 @@ namespace Telescopes
             }
             float segT = t - segNum;
             return segments[segNum].sample(segT);
+        }
+
+        public Vector3 StartTangent()
+        {
+            return sampleTangent(0);
+        }
+
+        public Vector3 EndTangent()
+        {
+            return sampleTangent(NumSegments);
+        }
+
+        public Vector3 sampleTangent(float t)
+        {
+            int segNum = Mathf.FloorToInt(t);
+            if (segNum >= segments.Count)
+            {
+                return segments[segments.Count - 1].sampleTangent(1).normalized;
+            }
+            float segT = t - segNum;
+            return segments[segNum].sampleTangent(segT).normalized;
         }
 
         float searchNextPoint(float startT, float segmentLength)
@@ -174,36 +313,57 @@ namespace Telescopes
             while (curT < maxT)
             {
                 nextT = searchNextPoint(curT, segmentLength);
-                allPoints.Add(sample(nextT));
+                Vector3 nextPoint = sample(nextT);
+                allPoints.Add(nextPoint);
                 curT = nextT;
             }
 
             return allPoints;
         }
 
+        public DiscreteCurve ConvertToDCurve()
+        {
+            float segLength = 0.1f;
+
+            List<Vector3> discretePoints = discretizeSpline(segLength);
+
+            lineRender.SetVertexCount(discretePoints.Count);
+            lineRender.SetPositions(discretePoints.ToArray());
+
+            GameObject discretized = new GameObject();
+            discretized.transform.parent = transform.parent;
+
+            discretized.name = "DiscretizedCurve";
+            DiscreteCurve dCurve = discretized.AddComponent<DiscreteCurve>();
+            dCurve.InitFromPoints(discretePoints, segLength);
+
+            LineRenderer lr = dCurve.GetComponent<LineRenderer>();
+            lr.SetWidth(0.1f, 0.1f);
+            lr.material = lineRender.material;
+
+            gameObject.SetActive(false);
+
+            return dCurve;
+        }
+
         // Update is called once per frame
         void Update()
         {
-            if (Input.GetKeyDown("p"))
+            if (Input.GetKey("left shift") && Input.GetKeyDown("p") && !parent)
             {
-                float segLength = 0.1f;
+                ConvertToDCurve();
+            }
 
-                List<Vector3> discretePoints = discretizeSpline(segLength);
-
-                lineRender.SetVertexCount(discretePoints.Count);
-                lineRender.SetPositions(discretePoints.ToArray());
-                
-                GameObject discretized = new GameObject();
-
-                discretized.name = "DiscretizedCurve";
-                DiscreteCurve dCurve = discretized.AddComponent<DiscreteCurve>();
-                dCurve.InitFromPoints(discretePoints, segLength);
-
-                LineRenderer lr = dCurve.GetComponent<LineRenderer>();
-                lr.SetWidth(0.1f, 0.1f);
-                lr.material = lineRender.material;
-
-                gameObject.SetActive(false);
+                if (points.Count >= 4)
+            {
+                if (StartBulb)
+                {
+                    spheres[1].FollowBulb(StartBulb, StartTangent());
+                }
+                if (EndBulb)
+                {
+                    spheres[spheres.Count - 2].FollowBulb(EndBulb, -EndTangent());
+                }
             }
         }
     }
@@ -215,11 +375,17 @@ namespace Telescopes
 
         public CatmullRomSegment(Vector3 v0, Vector3 v1, Vector3 v2, Vector3 v3)
         {
+            ResetPositions(v0, v1, v2, v3);
+        }
+
+        public void ResetPositions(Vector3 v0, Vector3 v1, Vector3 v2, Vector3 v3)
+        {
             // Set points
             P0 = v0;
             P1 = v1;
             P2 = v2;
             P3 = v3;
+            // Recompute tangents and stuff
             recomputeParameters();
         }
 
@@ -246,10 +412,42 @@ namespace Telescopes
             return C;
         }
 
+        Vector3 tangentRaw(float t)
+        {
+            Vector3 A1 = (t1 - t) / (t1 - t0) * P0 + (t - t0) / (t1 - t0) * P1;
+            Vector3 A2 = (t2 - t) / (t2 - t1) * P1 + (t - t1) / (t2 - t1) * P2;
+            Vector3 A3 = (t3 - t) / (t3 - t2) * P2 + (t - t2) / (t3 - t2) * P3;
+
+            Vector3 B1 = (t2 - t) / (t2 - t0) * A1 + (t - t0) / (t2 - t0) * A2;
+            Vector3 B2 = (t3 - t) / (t3 - t1) * A2 + (t - t1) / (t3 - t1) * A3;
+
+            Vector3 dA1dt = (-1 / (t1 - t0)) * P0 + (1 / (t1 - t0)) * P1;
+            Vector3 dA2dt = (-1 / (t2 - t1)) * P1 + (1 / (t2 - t1)) * P2;
+            Vector3 dA3dt = (-1 / (t3 - t2)) * P2 + (1 / (t3 - t2)) * P3;
+
+            Vector3 dB1dt = (-1 / (t2 - t0) * A1 + (t2 - t) / (t2 - t0) * dA1dt)
+                + (1 / (t2 - t0) * A2 + (t - t0) / (t2 - t0) * dA2dt);
+
+            Vector3 dB2dt = (-1 / (t3 - t1) * A2 + (t3 - t) / (t3 - t1) * dA2dt)
+                + (1 / (t3 - t1) * A3 + (t - t1) / (t3 - t1) * dA3dt);
+
+            Vector3 dCdt = (-1 / (t2 - t1) * B1 + (t2 - t) / (t2 - t1) * dB1dt)
+                + (1 / (t2 - t1) * B2 + (t - t1) / (t2 - t1) * dB2dt);
+
+            return dCdt;
+        }
+
         public Vector3 sample(float t)
         {
             float scaledT = t * t2 + (1 - t) * t1;
             Vector3 p = sampleRaw(scaledT);
+            return p;
+        }
+
+        public Vector3 sampleTangent(float t)
+        {
+            float scaledT = t * t2 + (1 - t) * t1;
+            Vector3 p = tangentRaw(scaledT);
             return p;
         }
 

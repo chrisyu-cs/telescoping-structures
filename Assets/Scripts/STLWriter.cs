@@ -10,7 +10,7 @@ namespace Telescopes
     {
         delegate Vector3 VectorTransform(Vector3 v);
 
-        public static void WriteSTLOfSegment(TelescopingSegment segment, string s)
+        public static void WriteSTLOfSegment(TelescopingSegment segment, string filename)
         {
             segment.transform.position = Vector3.zero;
             segment.shells[0].transform.rotation = Quaternion.identity;
@@ -44,7 +44,7 @@ namespace Telescopes
             }
 
             allLines.Add("endsolid");
-            File.WriteAllLines(s, allLines.ToArray());
+            File.WriteAllLines(filename, allLines.ToArray());
         }
 
         public static void WriteSTLOfMesh(Mesh m, string s)
@@ -85,9 +85,9 @@ namespace Telescopes
             for (int i = 0; i < numTriangles; i++)
             {
                 // Unity has clockwise winding order; STL takes CCW, so reverse
-                int i1 = m.triangles[3 * i + 2];
+                int i1 = m.triangles[3 * i + 0];
                 int i2 = m.triangles[3 * i + 1];
-                int i3 = m.triangles[3 * i + 0];
+                int i3 = m.triangles[3 * i + 2];
 
                 Vector3 p1 = f(m.vertices[i1]);
                 Vector3 p2 = f(m.vertices[i2]);

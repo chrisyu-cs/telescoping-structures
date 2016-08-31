@@ -10,6 +10,10 @@ namespace Telescopes
         public int parentElementNum;
         public float offsetAlongParent;
 
+        public Vector3 offsetFromParent;
+
+        public bool keepLocalPositionOnStart = false;
+
         public float Radius
         {
             get
@@ -45,6 +49,13 @@ namespace Telescopes
             this.transform.parent = parentElement.transform;
             this.transform.localPosition = parentElement.getAttachmentLocation(attachmentPoint);
             this.transform.localRotation = parentElement.getAttachmentRotation(attachmentPoint);
+        }
+
+        public void SetParentToSegmentEnd(TelescopingSegment segment)
+        {
+            parent = segment;
+            parentElementNum = segment.shells.Count - 1;
+            //SetParent(segment, segment.shells.Count - 1, 1);
         }
 
         float OverlapArea(Vector3 normal1, Vector3 normal2, float radius1, float radius2)
@@ -173,8 +184,12 @@ namespace Telescopes
             {
                 TelescopeElement parentElement = parent.getChildElement(parentElementNum);
                 transform.parent = parentElement.transform;
-                transform.localPosition = parentElement.getAttachmentLocation(offsetAlongParent);
-                transform.localRotation = parentElement.getAttachmentRotation(offsetAlongParent);
+
+                if (!keepLocalPositionOnStart)
+                {
+                    transform.localPosition = parentElement.getAttachmentLocation(offsetAlongParent);
+                    transform.localRotation = parentElement.getAttachmentRotation(offsetAlongParent);
+                }
             }
         }
 
@@ -191,7 +206,7 @@ namespace Telescopes
         // Update is called once per frame
         void Update()
         {
-            if (Input.GetKeyDown("r"))
+            if (Input.GetKey("left shift") && Input.GetKeyDown("r"))
             {
                 float error = OverlapError();
                 Color c = Color.Lerp(Color.white, Color.red, error);

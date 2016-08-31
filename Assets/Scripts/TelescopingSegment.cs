@@ -64,6 +64,12 @@ namespace Telescopes
             }
         }
 
+        public void SetParent(TelescopeBulb bulb)
+        {
+            parent = bulb;
+            parentElementNumber = 0;
+        }
+
         public override int numChildElements()
         {
             return shells.Count;
@@ -375,7 +381,7 @@ namespace Telescopes
                 Reversed = ReversedOption;
             }
 
-            if (Input.GetKeyDown("enter"))
+            if (Input.GetKey("left shift") && Input.GetKeyDown("enter"))
             {
                 STLWriter.WriteSTLOfSegment(this, name + ".stl");
             }

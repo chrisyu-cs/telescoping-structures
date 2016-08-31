@@ -22,16 +22,15 @@ namespace Telescopes
         public Material defaultTelescopeMaterial;
         public Material selectedTelescopeMaterial;
 
+        public Material defaultLineMaterial;
+
         public InputCurve curve;
 
         public GameObject projectilePrefab;
-
-        private SplineControlPoint selectedControlPt;
-        private float selectedDepth;
         
-        private TreeControlPoint selectedTreePt;
-        private TreeControlPoint highlightedTreePt;
-        private Transform selectedDraggable;
+        private float selectedDepth;
+
+        private DraggablePoint draggable;
 
         public LayerMask normalMask;
         public LayerMask curveModeMask;
@@ -48,6 +47,9 @@ namespace Telescopes
         public bool UseSparseSolve = true;
 
         public int numImpulses = 10;
+        public SplineCanvas splineCanvas;
+
+        public MeshFilter currentMesh;
 
         void Awake()
         {
@@ -69,12 +71,13 @@ namespace Telescopes
             modeText.text = "Shell mode";
             splinePoints.text = "0";
             impulsePoints.text = numImpulses.ToString();
+            splineCanvas = FindObjectOfType<SplineCanvas>();
         }
 
-        void RaycastShells(Vector3 clickPos)
+        bool RaycastShells(Vector3 clickPos, out RaycastHit hitInfo)
         {
             Ray mouseRay = Camera.main.ScreenPointToRay(clickPos);
-            RaycastHit hitInfo = new RaycastHit();
+            hitInfo = new RaycastHit();
 
             LayerMask mask;
 
@@ -96,32 +99,10 @@ namespace Telescopes
 
             if (Physics.Raycast(mouseRay, out hitInfo, 20f, mask))
             {
-                TelescopingShell selection = hitInfo.collider.GetComponent<TelescopingShell>();
-
-                SplineControlPoint controlPt = hitInfo.collider.GetComponent<SplineControlPoint>();
-                TreeControlPoint treePt = hitInfo.collider.GetComponent<TreeControlPoint>();
-                CurvatureControlPoint curvPt = hitInfo.collider.GetComponent<CurvatureControlPoint>();
-
-                if (selection) SelectShell(selection);
-
-                else if (treePt)
-                {
-                    highlightedTreePt = treePt;
-                    treePt.containingTree.SelectNode(treePt);
-                    selectedTreePt = treePt;
-                    selectedDepth = Camera.main.WorldToScreenPoint(treePt.transform.position).z;
-                }
-                else if (controlPt)
-                {
-                    selectedControlPt = controlPt;
-                    selectedDepth = Camera.main.WorldToScreenPoint(controlPt.transform.position).z;
-                }
-                else if (curvPt)
-                {
-                    selectedDraggable = curvPt.transform;
-                    selectedDepth = Camera.main.WorldToScreenPoint(curvPt.transform.position).z;
-                }
+                return true;
             }
+
+            return false;
         }
 
         public void ToggleSparse()
@@ -151,40 +132,51 @@ namespace Telescopes
                 }
             }
 
-            if (Input.GetMouseButtonDown(0))
+            RaycastHit hitInfo = new RaycastHit();
+
+            if (Input.GetMouseButtonDown(0) && RaycastShells(Input.mousePosition, out hitInfo))
             {
-                Vector3 clickPos = Input.mousePosition;
-                RaycastShells(clickPos);
+                TelescopingShell selection = hitInfo.collider.GetComponent<TelescopingShell>();
+                DraggablePoint draggablePt = hitInfo.collider.GetComponent<DraggablePoint>();
+
+                if (selection) SelectShell(selection);
+
+                else if (draggablePt)
+                {
+                    draggable = draggablePt;
+                    selectedDepth = Camera.main.WorldToScreenPoint(draggablePt.transform.position).z;
+                }
             }
 
-            else if (Input.GetMouseButton(0) && selectedControlPt)
+            else if (Input.GetMouseButton(0) && draggable)
             {
                 Vector3 clickPos = Input.mousePosition;
                 clickPos.z = selectedDepth;
                 Vector3 worldPos = Camera.main.ScreenToWorldPoint(clickPos);
-                selectedControlPt.Move(worldPos);
+
+                DraggablePoint intersectedBulb = splineCanvas.IntersectedBulb(worldPos);
+
+                if (draggable.Type != PointType.Bulb && draggable.IsEndPoint() && intersectedBulb)
+                {
+                    draggable.AttachToBulb(intersectedBulb);
+                }
+                else
+                {
+                    draggable.Move(worldPos);
+                }
             }
 
-            else if (Input.GetMouseButton(0) && selectedTreePt)
+            else if (Input.GetMouseButtonDown(1) && RaycastShells(Input.mousePosition, out hitInfo))
             {
                 Vector3 clickPos = Input.mousePosition;
-                clickPos.z = selectedDepth;
-                Vector3 worldPos = Camera.main.ScreenToWorldPoint(clickPos);
-                selectedTreePt.Move(worldPos);
-            }
+                DraggablePoint clicked = hitInfo.collider.GetComponent<DraggablePoint>();
 
-            else if (Input.GetMouseButton(0) && selectedDraggable)
-            {
-                Vector3 clickPos = Input.mousePosition;
-                clickPos.z = selectedDepth;
-                Vector3 worldPos = Camera.main.ScreenToWorldPoint(clickPos);
-                selectedDraggable.transform.position = worldPos;
-            }
+                if (clicked)
+                {
+                    if (Input.GetKey("left ctrl")) clicked.Delete();
+                    else clicked.Duplicate();
+                }
 
-            else if (Input.GetMouseButtonDown(2))
-            {
-                Vector3 clickPos = Input.mousePosition;
-                RaycastShells(clickPos);
                 // Store the eye-space position of the click.
                 // Use eye space because we always want moving up/down to correspond
                 // to bigger or smaller, regardless of camera orientation.
@@ -193,39 +185,31 @@ namespace Telescopes
                 lastMousePos = Camera.main.ScreenToViewportPoint(lastMousePos);
             }
 
-            else if (Input.GetMouseButton(2) && selectedControlPt)
+            else if (Input.GetMouseButtonDown(2) && RaycastShells(Input.mousePosition, out hitInfo))
             {
-                // Compute the new eye-space position the mouse has moved to
-                Vector3 mousePos = Input.mousePosition;
-                mousePos.z = selectedDepth;
-                mousePos = Camera.main.ScreenToViewportPoint(mousePos);
-                // Take difference in height
-                float heightDiff = mousePos.y - lastMousePos.y;
-                // Resize it
-                selectedControlPt.ResizeDiff(heightDiff);
-                // Update previous point to current
-                lastMousePos = mousePos;
+                Vector3 clickPos = Input.mousePosition;
+                
+                // Store the eye-space position of the click.
+                // Use eye space because we always want moving up/down to correspond
+                // to bigger or smaller, regardless of camera orientation.
+                lastMousePos = clickPos;
+                lastMousePos.z = selectedDepth;
+                lastMousePos = Camera.main.ScreenToViewportPoint(lastMousePos);
             }
 
-            else if (Input.GetMouseButton(2) && selectedTreePt)
+            else if (Input.mouseScrollDelta.y != 0 && RaycastShells(Input.mousePosition, out hitInfo))
             {
-                // Compute the new eye-space position the mouse has moved to
-                Vector3 mousePos = Input.mousePosition;
-                mousePos.z = selectedDepth;
-                mousePos = Camera.main.ScreenToViewportPoint(mousePos);
-                // Take difference in height
-                float heightDiff = mousePos.y - lastMousePos.y;
-                // Resize it
-                selectedTreePt.ResizeDiff(heightDiff);
-                // Update previous point to current
-                lastMousePos = mousePos;
+                DraggablePoint draggablePt = hitInfo.collider.GetComponent<DraggablePoint>();
+                if (draggablePt)
+                {
+                    float change = Input.mouseScrollDelta.y * 0.05f;
+                    draggablePt.Resize(change);
+                }
             }
 
             else if (Input.GetMouseButtonUp(0) || Input.GetMouseButtonUp(2))
             {
-                selectedControlPt = null;
-                selectedTreePt = null;
-                selectedDraggable = null;
+                draggable = null;
             }
 
             else if (Input.GetButtonDown("Cancel"))
@@ -235,10 +219,7 @@ namespace Telescopes
 
             else if (Input.GetButtonDown("Submit"))
             {
-                if (highlightedTreePt)
-                {
-                    highlightedTreePt.containingTree.MakeTelescopes();
-                }
+                Debug.Log("submit");
             }
 
             shootTime += Time.deltaTime;
@@ -353,6 +334,16 @@ namespace Telescopes
             }
         }
 
+        public void WriteCurrentMeshOBJ()
+        {
+            if (filenameField.text == "")
+            {
+                Debug.Log("file name empty");
+                return;
+            }
+            OBJWriter.ExportToOBJ(currentMesh.mesh, filenameField.text);
+        }
+
         public void SetNumImpulses()
         {
             numImpulses = int.Parse(impulsePoints.text);
@@ -366,8 +357,6 @@ namespace Telescopes
             Vector3 dir = Camera.main.transform.forward;
 
             Vector3 pos = Camera.main.transform.position;
-
-
 
             proj.transform.position = pos + 2 * dir;
             rb.velocity = 10 * dir;

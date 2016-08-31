@@ -328,7 +328,7 @@ namespace Telescopes
 
             float slopeCosmetic = thickness * Constants.COSMETIC_TAPER_RATIO;
 
-            CylinderMesh outerCyl = GenerateCylinder(length, radius, curvature, slopeCosmetic + Constants.TAPER_SLOPE);
+            CylinderMesh outerCyl = GenerateCylinder(length, radius - Constants.SHELL_GAP, curvature, slopeCosmetic + Constants.TAPER_SLOPE);
             CylinderMesh innerCyl = GenerateCylinder(length, radius - thickness, curvature, Constants.TAPER_SLOPE);
 
             // Flatten vertex list

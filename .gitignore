@@ -29,6 +29,7 @@ sysinfo.txt
 
 # Gurobi log
 impulseQP.log
+curvatureOpt.log
 
 # Output meshes
 *.stl
