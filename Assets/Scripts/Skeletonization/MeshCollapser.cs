@@ -15,6 +15,9 @@ namespace Telescopes
         List<Triangle> triangles;
         Dictionary<EdgePair, Triangle> edgeToTri;
         HashSet<int>[] identifiedPoints;
+
+        UnionFind<VertexNode> quadricUF;
+
         TriangleNode[] triNodes;
         
         HashSet<int>[] adjacency;
@@ -488,7 +491,13 @@ namespace Telescopes
                 Debug.Log("Set up PQ finished in " + diff + " seconds");
 
                 startTime = Time.realtimeSinceStartup;
+                quadricUF = VertexNode.MakeUnionFind(heMesh);
+                endTime = Time.realtimeSinceStartup;
+                diff = endTime - startTime;
+                Debug.Log("Make union-find finished in " + diff + " seconds");
 
+                startTime = Time.realtimeSinceStartup;
+                
                 // Collapse edges until there are no more triangles.
                 bool hasMore = true;
                 do
@@ -523,6 +532,37 @@ namespace Telescopes
 
                 DepthFirstSearch(maxVert);
             }
+
+            /*
+            if (doCollapse)
+            {
+                // Collapse edges until there are no more triangles.
+                bool hasMore = CollapseShortestPQ();
+
+                if (!hasMore)
+                {
+                    // Now construct adjacency lists.
+                    ConstructAdjacencyLists();
+
+                    // Find the vertex with highest degree
+                    int maxDeg = 0;
+                    int maxVert = 0;
+                    for (int i = 0; i < identifiedPoints.Length; i++)
+                    {
+                        int degree = adjacency[i].Count;
+                        if (degree > maxDeg)
+                        {
+                            maxVert = i;
+                            maxDeg = degree;
+                        }
+
+                        doCollapse = false;
+                    }
+
+                    DepthFirstSearch(maxVert);
+                }
+            }
+            */
         }
     }
 
