@@ -104,8 +104,7 @@ namespace Telescopes
             {
                 rightTri.collapsed = true;
             }
-
-
+            
             HashSet<int> pts1 = identifiedPoints[ep.v1];
             HashSet<int> pts2 = identifiedPoints[ep.v2];
 
@@ -128,53 +127,6 @@ namespace Telescopes
             }
 
             mesh.vertices = verts;
-        }
-
-        void CountUncollapsedTriangles()
-        {
-            int count = 0;
-            foreach (Triangle tri in triangles)
-            {
-                if (!tri.collapsed) count++;
-            }
-            Debug.Log(count + " uncollapsed triangles");
-        }
-
-        void CheckEqual()
-        {
-            for (int v = 0; v < identifiedPoints.Length; v++)
-            {
-                HashSet<int> set = identifiedPoints[v];
-                bool started = false;
-                Vector3 pos = Vector3.zero;
-                bool okay = true;
-
-                foreach (int i in set)
-                {
-                    if (!started)
-                    {
-                        started = true;
-                        pos = mesh.vertices[i];
-                    }
-                    else
-                    {
-                        if (mesh.vertices[i] != pos)
-                        {
-                            okay = false;
-                        }
-                    }
-                }
-
-                if (!okay)
-                {
-                    string s = "";
-                    foreach (int i in set)
-                    {
-                        s += " " + i;
-                    }
-                    throw new System.Exception("Equivalence class " + s + " failed (belongs to " + v + ")");
-                }
-            }
         }
 
         /// <summary>
@@ -229,34 +181,6 @@ namespace Telescopes
                 he = he.next;
             }
             while (he != start);
-        }
-
-        bool CollapseShortestEdge()
-        {
-            int numTriangles = mesh.triangles.Length / 3;
-
-            bool foundTriangle = false;
-            EdgePair shortest = null;
-
-            // Find the shortest edge in the entire mesh
-            foreach (Triangle tri in triangles)
-            {
-                if (tri.collapsed) continue;
-
-                if (!foundTriangle) foundTriangle = true;
-
-                EdgePair triShortest = ShortestEdgeOfTriangle(tri);
-                if (shortest == null || LengthOfEdgePair(triShortest) < LengthOfEdgePair(shortest))
-                    shortest = triShortest;
-            }
-
-            if (foundTriangle)
-            {
-                CollapseEdge(shortest);
-            }
-            CountUncollapsedTriangles();
-
-            return foundTriangle;
         }
 
         void SetUpPriorityQueue()
@@ -477,6 +401,74 @@ namespace Telescopes
             */
         }
 
+        void CollapseOne()
+        {
+            // Collapse edges until there are no more triangles.
+            bool hasMore = CollapseShortestPQ();
+
+            if (!hasMore)
+            {
+                // Now construct adjacency lists.
+                ConstructAdjacencyLists();
+
+                // Find the vertex with highest degree
+                int maxDeg = 0;
+                int maxVert = 0;
+                for (int i = 0; i < identifiedPoints.Length; i++)
+                {
+                    int degree = adjacency[i].Count;
+                    if (degree > maxDeg)
+                    {
+                        maxVert = i;
+                        maxDeg = degree;
+                    }
+                }
+
+                DepthFirstSearch(maxVert);
+                doCollapse = false;
+            }
+        }
+
+        void CollapseAll()
+        {
+            float startTime, endTime, diff;
+            startTime = Time.realtimeSinceStartup;
+
+            // Collapse edges until there are no more triangles.
+            bool hasMore = true;
+            do
+            {
+                hasMore = CollapseShortestPQ();
+            }
+            while (hasMore);
+
+            endTime = Time.realtimeSinceStartup;
+            diff = endTime - startTime;
+            Debug.Log("Edge collapsing finished in " + diff + " seconds");
+
+            // Now construct adjacency lists.
+            startTime = Time.realtimeSinceStartup;
+            ConstructAdjacencyLists();
+            endTime = Time.realtimeSinceStartup;
+            diff = endTime - startTime;
+            Debug.Log("Adjacency structure finished in " + diff + " seconds");
+
+            // Find the vertex with highest degree
+            int maxDeg = 0;
+            int maxVert = 0;
+            for (int i = 0; i < identifiedPoints.Length; i++)
+            {
+                int degree = adjacency[i].Count;
+                if (degree > maxDeg)
+                {
+                    maxVert = i;
+                    maxDeg = degree;
+                }
+            }
+
+            DepthFirstSearch(maxVert);
+        }
+
         void Update()
         {
             if (!doCollapse && Input.GetKey("left shift") && Input.GetKeyDown("h"))
@@ -496,73 +488,12 @@ namespace Telescopes
                 diff = endTime - startTime;
                 Debug.Log("Make union-find finished in " + diff + " seconds");
 
-                startTime = Time.realtimeSinceStartup;
-                
-                // Collapse edges until there are no more triangles.
-                bool hasMore = true;
-                do
-                {
-                    hasMore = CollapseShortestPQ();
-                }
-                while (hasMore);
-
-                endTime = Time.realtimeSinceStartup;
-                diff = endTime - startTime;
-                Debug.Log("Edge collapsing finished in " + diff + " seconds");
-
-                // Now construct adjacency lists.
-                startTime = Time.realtimeSinceStartup;
-                ConstructAdjacencyLists();
-                endTime = Time.realtimeSinceStartup;
-                diff = endTime - startTime;
-                Debug.Log("Adjacency structure finished in " + diff + " seconds");
-
-                // Find the vertex with highest degree
-                int maxDeg = 0;
-                int maxVert = 0;
-                for (int i = 0; i < identifiedPoints.Length; i++)
-                {
-                    int degree = adjacency[i].Count;
-                    if (degree > maxDeg)
-                    {
-                        maxVert = i;
-                        maxDeg = degree;
-                    }
-                }
-
-                DepthFirstSearch(maxVert);
+                //CollapseAll();
             }
-
-            /*
             if (doCollapse)
             {
-                // Collapse edges until there are no more triangles.
-                bool hasMore = CollapseShortestPQ();
-
-                if (!hasMore)
-                {
-                    // Now construct adjacency lists.
-                    ConstructAdjacencyLists();
-
-                    // Find the vertex with highest degree
-                    int maxDeg = 0;
-                    int maxVert = 0;
-                    for (int i = 0; i < identifiedPoints.Length; i++)
-                    {
-                        int degree = adjacency[i].Count;
-                        if (degree > maxDeg)
-                        {
-                            maxVert = i;
-                            maxDeg = degree;
-                        }
-
-                        doCollapse = false;
-                    }
-
-                    DepthFirstSearch(maxVert);
-                }
+                CollapseOne();
             }
-            */
         }
     }
 

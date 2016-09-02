@@ -22,6 +22,17 @@ namespace UnityDDG
             }
         }
 
+        public Vector3 Normal
+        {
+            get
+            {
+                Vector3 edge1 = anyHalfEdge.flip.vector;
+                Vector3 edge2 = anyHalfEdge.next.vector;
+
+                return Vector3.Cross(edge1, edge2).normalized;
+            }
+        }
+
         public float Area
         {
             get
@@ -42,6 +53,7 @@ namespace UnityDDG
             }
         }
 
+        public bool Collapsed = false;
         public int Index;
     }
 }

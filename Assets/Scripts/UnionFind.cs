@@ -24,45 +24,45 @@ public class UnionFind<UFNode> where UFNode : UnionFindNode, new()
         }
     }
 
-    public UnionFindNode Find(UnionFindNode node)
+    public UFNode Find(UFNode node)
     {
         // Path compression: point directly to root of tree once found.
         if (node.Parent != node)
         {
-            node.Parent = Find(node.Parent);
+            node.Parent = Find(node.Parent as UFNode);
         }
-        return node.Parent;
+        return node.Parent as UFNode;
     }
 
-    public UnionFindNode Find(int x)
+    public UFNode Find(int x)
     {
         return Find(nodes[x]);
     }
 
-    public void Union(UnionFindNode x, UnionFindNode y)
+    public void Union(UFNode x, UFNode y)
     {
-        UnionFindNode xRoot = Find(x);
-        UnionFindNode yRoot = Find(y);
+        UFNode xRoot = Find(x);
+        UFNode yRoot = Find(y);
 
         if (xRoot == yRoot) return;
 
         // Union-by-rank: make the smaller set the child of the larger set.
         if (xRoot.Rank < yRoot.Rank)
         {
-            xRoot.Parent = yRoot;
             yRoot.Merge(xRoot);
+            xRoot.Parent = yRoot;
         }
         else if (xRoot.Rank > yRoot.Rank)
         {
-            yRoot.Parent = xRoot;
             xRoot.Merge(yRoot);
+            yRoot.Parent = xRoot;
         }
         else
         {
+            xRoot.Merge(yRoot);
             // If same size, break ties either way and increase rank.
             yRoot.Parent = xRoot;
             xRoot.Rank++;
-            xRoot.Merge(yRoot);
         }
     }
 
@@ -72,7 +72,7 @@ public class UnionFind<UFNode> where UFNode : UnionFindNode, new()
     }
 }
 
-public class UnionFindNode
+public abstract class UnionFindNode
 {
     public UnionFindNode Parent;
     public int Rank;
@@ -87,5 +87,5 @@ public class UnionFindNode
     /// Merge the other information of the child into the parent (this).
     /// </summary>
     /// <param name="child"></param>
-    public virtual void Merge(UnionFindNode child) { }
+    public abstract void Merge(UnionFindNode child);
 }
