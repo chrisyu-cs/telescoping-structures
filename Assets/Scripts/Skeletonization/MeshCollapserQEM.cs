@@ -177,7 +177,6 @@ namespace Telescopes
 
         void InitPQ()
         {
-            Debug.Log("Init pq");
             uf = VertexNode.MakeUnionFind(heMesh);
 
             for (int i = 0; i < uf.NumNodes; i++)
@@ -200,8 +199,6 @@ namespace Telescopes
                 
                 PQ.Enqueue(nodes[i], cost);
             }
-
-            Debug.Log(PQ);
         }
 
         void CollapseEdge(Edge e)
@@ -329,15 +326,17 @@ namespace Telescopes
         {
             if (Input.GetKeyDown("h"))
             {
+                Debug.Log("Start collapse");
                 doCollapse = true;
                 InitQuadrics();
                 InitPQ();
-
+                
                 float start = Time.realtimeSinceStartup;
                 CollapseAll();
                 float end = Time.realtimeSinceStartup;
                 float diff = end - start;
                 Debug.Log("Collapsed all triangles in " + diff + " seconds");
+                
             }
 
             if (doCollapse)

@@ -63,7 +63,7 @@ namespace Telescopes
                 previousVec.Normalize();
                 nextVec.Normalize();
 
-                Vector3 curvatureBinormal = Vector3.Cross(previousVec, nextVec);
+                Vector3 curvatureBinormal = Vector3.Cross(previousVec, nextVec).normalized;
                 if (i == 1) startingBinormal = curvatureBinormal;
 
                 // Compute bending angles (discrete curvature).
@@ -106,7 +106,6 @@ namespace Telescopes
             }
 
             targetEndPoint = ReconstructFromAngles();
-
             ComputeFrenetFrames();
             ComputeBishopFrames();
         }
@@ -201,6 +200,7 @@ namespace Telescopes
                 DCurvePoint dcp = discretizedPoints[i];
                 dcp.position = currentPoint;
                 currentBinormal = Quaternion.AngleAxis(dcp.twistingAngle, currentDir) * currentBinormal;
+                
                 Quaternion nextRot = Quaternion.AngleAxis(dcp.bendingAngle, currentBinormal);
                 currentDir = nextRot * currentDir;
                 currentPoint += currentDir * segmentLength;
@@ -245,6 +245,9 @@ namespace Telescopes
             lineRender = GetComponent<LineRenderer>();
             lineRender.SetVertexCount(curvePoints.Count);
             lineRender.SetPositions(curvePoints.ToArray());
+
+            if (startingBinormal.magnitude < 0.1f)
+                lineRender.SetColors(Color.blue, Color.blue);
         }
 
         void ComputeFrenetFrames()
@@ -316,6 +319,7 @@ namespace Telescopes
                     normal = Vector3.Cross(binormal, tangent);
                 }
 
+                startingBinormal = binormal;
                 OrthonormalFrame defaultFrame = new OrthonormalFrame(tangent, normal, binormal);
 
                 foreach (DCurvePoint dcp in discretizedPoints)
@@ -532,7 +536,21 @@ namespace Telescopes
         {
             bool isShiftKeyDown = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
 
-            List<float> points = EvenlySpacedPoints(DesignerController.instance.numImpulses);
+            int numImpulses = DesignerController.instance.numImpulses;
+
+            if (parentBulb && childBulb)
+            {
+                float radiusDiff = Mathf.Abs(parentBulb.radius - childBulb.radius);
+                numImpulses = Mathf.CeilToInt(radiusDiff / Constants.DEFAULT_WALL_THICKNESS);
+                numImpulses = Mathf.Max(numImpulses, 2);
+            }
+            else if (parentBulb)
+            {
+                numImpulses = Mathf.CeilToInt((parentBulb.radius - 0.1f) / Constants.DEFAULT_WALL_THICKNESS);
+                numImpulses = Mathf.Max(numImpulses, 2);
+            }
+
+            List<float> points = EvenlySpacedPoints(numImpulses);
             if (isShiftKeyDown)
             {
                 if (DesignerController.instance.UseSparseSolve) return SolveImpulseLPSparse(points);
@@ -672,6 +690,7 @@ namespace Telescopes
             GameObject obj = new GameObject();
             obj.name = "TorsionApproxCurve";
             TorsionImpulseCurve impulseCurve = obj.AddComponent<TorsionImpulseCurve>();
+
             impulseCurve.InitFromData(impulses, arcSteps,
                 averageCurvature, constTorsion,
                 startFrame, startingPoint);

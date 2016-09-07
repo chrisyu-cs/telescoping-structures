@@ -24,7 +24,7 @@ namespace Telescopes
         void Start()
         {
             bulbs = new List<DraggablePoint>();
-            
+
             splines = new List<CatmullRomSpline>();
 
             dBulbs = new List<DCurveBulb>();
@@ -61,7 +61,7 @@ namespace Telescopes
             splineObj.name = "spline" + splines.Count;
         }
 
-        void AddBulb(Vector3 pos)
+        public DraggablePoint AddBulb(Vector3 pos)
         {
             GameObject bulbObj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             bulbObj.transform.position = pos;
@@ -74,11 +74,24 @@ namespace Telescopes
 
             bulbs.Add(point);
             bulbObj.name = "bulb" + bulbs.Count;
+
+            return point;
+        }
+
+        public void RemoveBulb(DraggablePoint bulb)
+        {
+            bulbs.Remove(bulb);
         }
 
         float RecentDepth()
         {
             return Camera.main.WorldToViewportPoint(mostRecentPoint).z;
+        }
+
+
+        public void DeleteSpline(CatmullRomSpline crs)
+        {
+            splines.Remove(crs);
         }
 
         public DraggablePoint IntersectedBulb(Vector3 point)
@@ -225,7 +238,9 @@ namespace Telescopes
 
                     foreach (TorsionImpulseCurve tic in tiCurves)
                     {
-                        TelescopingSegment seg = tic.MakeTelescope(tic.NumSegments * Constants.DEFAULT_WALL_THICKNESS + 0.1f);
+                        float startRadius = tic.NumSegments * Constants.DEFAULT_WALL_THICKNESS + 0.1f;
+                        if (tic.StartBulb) startRadius = tic.StartBulb.radius;
+                        TelescopingSegment seg = tic.MakeTelescope(startRadius);
                         seg.ExtendImmediate(1);
 
                         if (tic.StartBulb)

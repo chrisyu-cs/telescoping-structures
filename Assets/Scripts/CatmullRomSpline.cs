@@ -57,19 +57,30 @@ namespace Telescopes
             }
 
             SetMaterial(DesignerController.instance.defaultLineMaterial);
+            lineRender.SetColors(Color.white, Color.red);
 
             makeSegments();
-            updateRenderPoints();
             createSpheres();
+            MoveEndpoints();
+            updateRenderPoints();
         }
 
         public void DeletePoint(int index)
         {
             if (points.Count <= 1) return;
+
+            if (points.Count <= 4)
+            {
+                Destroy(gameObject);
+                containingCanvas.DeleteSpline(this);
+            }
+
             points.RemoveAt(index);
+
             makeSegments();
-            updateRenderPoints();
             createSpheres();
+            MoveEndpoints();
+            updateRenderPoints();
         }
 
         public void DuplicatePoint(int index)
@@ -118,28 +129,56 @@ namespace Telescopes
             }
         }
 
+        void MoveEndpoints()
+        {
+            if (points.Count < 4) return;
+            if (points.Count == 4)
+            {
+                int l = points.Count - 1;
+                Vector3 offsetBegin = (points[1] - points[2]).normalized * 0.1f;
+                Vector3 offsetEnd = -offsetBegin;
+
+                if (!StartBulb) points[0] = points[1] + offsetBegin;
+                if (!EndBulb) points[l] = points[l - 1] + offsetEnd;
+            }
+            else
+            {
+                if (!StartBulb)
+                {
+                    Vector3 circumBegin = TelescopeUtils.Circumcenter(points[1], points[2], points[3]);
+                    Vector3 normalBegin = Vector3.Cross(points[2] - points[1], points[3] - points[1]);
+                    Vector3 beginOffset = points[1] - circumBegin;
+                    Vector3 rotatedBegin = Quaternion.AngleAxis(-5, normalBegin) * beginOffset + circumBegin;
+                    Vector3 diffBegin = (rotatedBegin - points[1]).normalized * 0.1f;
+                    points[0] = points[1] + diffBegin;
+                }
+                
+                if (!EndBulb)
+                {
+                    int last = points.Count - 1;
+                    Vector3 circumEnd = TelescopeUtils.Circumcenter(points[last - 1], points[last - 2], points[last - 3]);
+                    Vector3 normalEnd = Vector3.Cross(points[last - 2] - points[last - 1], points[last - 3] - points[last - 1]);
+                    Vector3 endOffset = points[last - 1] - circumEnd;
+                    Vector3 rotatedEnd = Quaternion.AngleAxis(-5, normalEnd) * endOffset + circumEnd;
+                    Vector3 diffEnd = (rotatedEnd - points[last - 1]).normalized * 0.1f;
+                    points[last] = points[last - 1] + diffEnd;
+                }
+            }
+
+            FixSegmentsAroundIndex(0);
+            spheres[0].transform.position = points[0];
+
+            FixSegmentsAroundIndex(points.Count - 1);
+            spheres[points.Count - 1].transform.position = points[points.Count - 1];
+        }
+
         public void UpdatePosition(int index, Vector3 newPosition)
         {
             Vector3 offset = newPosition - points[index];
 
             points[index] = newPosition;
+            MoveEndpoints();
             FixSegmentsAroundIndex(index);
-
-            if (points.Count >= 4)
-            {
-                if (index == 1)
-                {
-                    points[0] += offset;
-                    FixSegmentsAroundIndex(0);
-                    spheres[0].transform.position = points[0];
-                }
-                else if (index == points.Count - 2)
-                {
-                    points[points.Count - 1] += offset;
-                    FixSegmentsAroundIndex(points.Count - 1);
-                    spheres[points.Count - 1].transform.position = points[points.Count - 1];
-                }
-            }
 
             updateRenderPoints();
         }
@@ -191,6 +230,12 @@ namespace Telescopes
 
                 spheres.Add(draggable);
             }
+
+            if (spheres.Count >= 4)
+            {
+                spheres[0].gameObject.SetActive(false);
+                spheres[spheres.Count - 1].gameObject.SetActive(false);
+            }
         }
 
         public Vector3 sample(float t)
@@ -228,7 +273,7 @@ namespace Telescopes
         float searchNextPoint(float startT, float segmentLength)
         {
             float maxT = segments.Count;
-            float diff = 0.1f;
+            float diff = sampleTangent(startT).magnitude;
             Vector3 curPt = sample(startT);
             Vector3 nextPt = sample(startT + diff);
             float lowerBound = diff;
@@ -293,7 +338,7 @@ namespace Telescopes
 
             if (numIterations >= maxIterations)
             {
-                //Debug.Log("Iteration cutoff reached (distance = " + distance + ")");
+                Debug.Log("Iteration cutoff reached (distance = " + distance + ")");
                 return startT + midT;
             }
 
@@ -354,15 +399,17 @@ namespace Telescopes
                 ConvertToDCurve();
             }
 
-                if (points.Count >= 4)
+            if (points.Count >= 4)
             {
                 if (StartBulb)
                 {
                     spheres[1].FollowBulb(StartBulb, StartTangent());
+                    spheres[0].Move(StartBulb.transform.position);
                 }
                 if (EndBulb)
                 {
                     spheres[spheres.Count - 2].FollowBulb(EndBulb, -EndTangent());
+                    spheres[spheres.Count - 1].Move(EndBulb.transform.position);
                 }
             }
         }

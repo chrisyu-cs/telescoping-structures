@@ -1,5 +1,5 @@
 ﻿using UnityEngine;
-using System.Collections;
+using System.Collections.Generic;
 
 namespace Telescopes
 {
@@ -8,6 +8,9 @@ namespace Telescopes
         public int index;
         public float radius;
         public CatmullRomSpline parentSpline;
+
+        List<CatmullRomSpline> splinesStart = new List<CatmullRomSpline>();
+        List<CatmullRomSpline> splinesEnd = new List<CatmullRomSpline>();
 
         public SplineCanvas containingCanvas;
 
@@ -29,11 +32,13 @@ namespace Telescopes
             {
                 tangentIndex = 0;
                 parentSpline.StartBulb = bulb;
+                splinesStart.Add(parentSpline);
             }
             else if (index == parentSpline.points.Count - 2)
             {
                 tangentIndex = parentSpline.points.Count - 1;
                 parentSpline.EndBulb = bulb;
+                splinesEnd.Add(parentSpline);
             }
             else return;
         }
@@ -68,6 +73,20 @@ namespace Telescopes
             {
                 parentSpline.DeletePoint(index);
             }
+            else if (Type == PointType.Bulb)
+            {
+                foreach (CatmullRomSpline crs in splinesStart)
+                {
+                    crs.StartBulb = null;
+                }
+                foreach (CatmullRomSpline crs in splinesEnd)
+                {
+                    crs.EndBulb = null;
+                }
+
+                containingCanvas.RemoveBulb(this);
+                Destroy(gameObject);
+            }
         }
 
         public void Duplicate()
@@ -78,6 +97,16 @@ namespace Telescopes
             {
                 containingCanvas.mostRecentPoint = transform.position;
                 parentSpline.DuplicatePoint(index);
+            }
+        }
+
+        public void SetSize(float f)
+        {
+            if (Type == PointType.Bulb)
+            {
+                containingCanvas.mostRecentPoint = transform.position;
+                radius = Mathf.Max(f, 0.05f);
+                transform.localScale = new Vector3(radius, radius, radius) * 2;
             }
         }
 

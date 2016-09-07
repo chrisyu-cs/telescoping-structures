@@ -44,7 +44,7 @@ namespace Telescopes
         private Vector3 lastMousePos;
 
         public Toggle sparseToggle;
-        public bool UseSparseSolve = true;
+        public bool UseSparseSolve = false;
 
         public int numImpulses = 10;
         public SplineCanvas splineCanvas;
@@ -204,6 +204,16 @@ namespace Telescopes
                 {
                     float change = Input.mouseScrollDelta.y * 0.05f;
                     draggablePt.Resize(change);
+                }
+            }
+
+            else if (Input.GetKeyDown("delete") && RaycastShells(Input.mousePosition, out hitInfo))
+            {
+                DraggablePoint draggablePt = hitInfo.collider.GetComponent<DraggablePoint>();
+
+                if (draggablePt)
+                {
+                    draggablePt.Delete();
                 }
             }
 

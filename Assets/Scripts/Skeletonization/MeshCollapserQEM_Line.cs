@@ -53,8 +53,23 @@ namespace Telescopes
             }
         }
 
+        void GetCanvas()
+        {
+            if (!outputCanvas)
+            {
+                outputCanvas = FindObjectOfType<SplineCanvas>();
+                if (!outputCanvas)
+                {
+                    GameObject canvasObj = new GameObject();
+                    canvasObj.name = name + "-canvas";
+                    outputCanvas = canvasObj.AddComponent<SplineCanvas>();
+                }
+            }
+        }
+
         void DepthFirstSearch(int initial)
         {
+            GetCanvas();
             bool[] visited = new bool[heMesh.Vertices.Length];
 
             int numVisited = 0;
@@ -70,6 +85,10 @@ namespace Telescopes
 
             // Keep track of the current chain of points
             List<int> currentPoints = null;
+
+            Dictionary<int, DraggablePoint> bulbDict = new Dictionary<int, DraggablePoint>();
+
+            DraggablePoint bulbAtStart = null;
 
             while (dfsStack.Count > 0)
             {
@@ -97,6 +116,12 @@ namespace Telescopes
                 // If this is the first point, start a new line segment.
                 if (currentPoints == null)
                 {
+                    Vector3 pos = transform.rotation * mesh.vertices[next] + transform.position;
+                    bulbAtStart = outputCanvas.AddBulb(pos);
+                    bulbAtStart.SetSize(0.1f);
+
+                    bulbDict.Add(next, bulbAtStart);
+
                     currentPoints = new List<int>();
                     currentPoints.Add(next);
                 }
@@ -113,18 +138,38 @@ namespace Telescopes
                     // Can filter out single dead-ends to try to remove noise
 
                     //if (currentPoints.Count > 2)
-                    AddLine(currentPoints);
+                    CatmullRomSpline spline = AddLine(currentPoints);
+                    spline.StartBulb = bulbAtStart;
 
                     // Start a new segment at the predecessor of the most recent branch point.
                     currentPoints = new List<int>();
-                    if (dfsStack.Count > 0) currentPoints.Add(dfsStack.Peek().predecessor);
+                    if (dfsStack.Count > 0)
+                    {
+                        currentPoints.Add(dfsStack.Peek().predecessor);
+                        DraggablePoint bulb;
+                        if (bulbDict.TryGetValue(dfsStack.Peek().predecessor, out bulb))
+                        {
+                            bulbAtStart = bulb;
+                        }
+                        else bulbAtStart = null;
+                    }
                 }
                 // If the point has degree greater than 2, then it is a branch, and we
                 // start a new segment at the current point.
                 else
                 {
+                    Vector3 pos = transform.rotation * mesh.vertices[next] + transform.position;
+                    DraggablePoint bulb = outputCanvas.AddBulb(pos);
+                    bulb.SetSize(0.1f);
+                    bulbDict.Add(next, bulb);
+
                     currentPoints.Add(next);
-                    AddLine(currentPoints);
+                    CatmullRomSpline spline = AddLine(currentPoints);
+                    spline.EndBulb = bulb;
+                    spline.StartBulb = bulbAtStart;
+
+                    // New segments should start at the bulb we just inserted.
+                    bulbAtStart = bulb;
 
                     currentPoints = new List<int>();
                     currentPoints.Add(next);
@@ -141,18 +186,8 @@ namespace Telescopes
 
         static float hue = 0;
 
-        void AddLine(List<int> pointIndices)
+        CatmullRomSpline AddLine(List<int> pointIndices)
         {
-            if (!outputCanvas)
-            {
-                outputCanvas = FindObjectOfType<SplineCanvas>();
-                if (!outputCanvas)
-                {
-                    GameObject canvasObj = new GameObject();
-                    canvasObj.name = name + "-canvas";
-                    outputCanvas = canvasObj.AddComponent<SplineCanvas>();
-                }
-            }
 
             Vector3[] points = new Vector3[pointIndices.Count];
             for (int i = 0; i < points.Length; i++)
@@ -162,7 +197,7 @@ namespace Telescopes
             }
 
             GameObject lineObj = new GameObject();
-            lineObj.transform.parent = transform;
+            lineObj.transform.parent = outputCanvas.transform;
             lineObj.transform.localPosition = Vector3.zero;
             lineObj.transform.localRotation = Quaternion.identity;
             lineObj.name = "skeleton-spline";
@@ -200,6 +235,8 @@ namespace Telescopes
             line.SetColors(c, c);
             hue = Mathf.Repeat(hue + 0.3f, 1);
             */
+
+            return crs;
         }
     }
 }
