@@ -544,9 +544,16 @@ namespace Telescopes
                 numImpulses = Mathf.CeilToInt(radiusDiff / Constants.DEFAULT_WALL_THICKNESS);
                 numImpulses = Mathf.Max(numImpulses, 2);
             }
+
             else if (parentBulb)
             {
                 numImpulses = Mathf.CeilToInt((parentBulb.radius - 0.1f) / Constants.DEFAULT_WALL_THICKNESS);
+                numImpulses = Mathf.Max(numImpulses, 2);
+            }
+
+            else if (childBulb)
+            {
+                numImpulses = Mathf.CeilToInt((childBulb.radius - 0.1f) / Constants.DEFAULT_WALL_THICKNESS);
                 numImpulses = Mathf.Max(numImpulses, 2);
             }
 

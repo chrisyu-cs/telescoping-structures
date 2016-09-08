@@ -12,6 +12,8 @@ namespace Telescopes
 
         public static void WriteSTLOfSegment(TelescopingSegment segment, string filename)
         {
+            Debug.Log("Write STL to " + filename);
+
             segment.transform.position = Vector3.zero;
             segment.shells[0].transform.rotation = Quaternion.identity;
             segment.ExtendImmediate(0);

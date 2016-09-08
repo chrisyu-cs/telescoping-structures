@@ -171,18 +171,18 @@ namespace Telescopes
         /// <returns></returns>
         List<IndexedVertex> GenerateCircle(int circNum, Vector3 centerPoint, Vector3 direction, float radius)
         {
-            float angleStep = (2 * Mathf.PI) / TelescopingSegment.verticesPerCircle;
+            float angleStep = (2 * Mathf.PI) / Constants.VERTS_PER_CIRCLE;
             List<IndexedVertex> verts = new List<IndexedVertex>();
 
-            float uvY = (float)circNum / TelescopingSegment.cutsPerCylinder;
+            float uvY = (float)circNum / Constants.CUTS_PER_CYLINDER;
 
             // First create points in a circle in the XY plane, facing the forward direction.
             // Then apply the rotation that will rotate the normal onto the desired direction.
             // Finally, offset it in space to the desired location.
             Quaternion circleRotation = Quaternion.FromToRotation(Vector3.forward, direction);
-            for (int i = 0; i < TelescopingSegment.verticesPerCircle; i++)
+            for (int i = 0; i < Constants.VERTS_PER_CIRCLE; i++)
             {
-                float uvX = i / TelescopingSegment.verticesPerCircle;
+                float uvX = i / Constants.VERTS_PER_CIRCLE;
                 // Make the vertices in clockwise order
                 Vector3 vert = new Vector3(Mathf.Cos(i * angleStep), -Mathf.Sin(i * angleStep));
                 // Scale by radius.
@@ -384,16 +384,18 @@ namespace Telescopes
             // We basically need to sweep a circular cross-section along a circular path.
             List<List<IndexedVertex>> circles = new List<List<IndexedVertex>>();
 
-            float lengthStep = 1f / (TelescopingSegment.cutsPerCylinder - 1);
+            float lengthStep = 1f / (Constants.CUTS_PER_CYLINDER - 1);
 
             // TODO: use curvatures
 
             float radiusLoss = 0;
 
+            int numCircles = Constants.CUTS_PER_CYLINDER + Constants.OVERHANG_CUTS;
+
             // Generate vertices
-            for (int i = 0; i < TelescopingSegment.cutsPerCylinder; i++)
+            for (int i = 0; i < numCircles; i++)
             {
-                radiusLoss = i * lengthStep * slope;
+                radiusLoss = i * lengthStep * slope * length;
                 Vector3 centerPoint = getLocalLocationAlongPath(i * lengthStep);
                 Vector3 facingDirection = getDirectionAlongPath(i * lengthStep);
                 List<IndexedVertex> circle = GenerateCircle(i, centerPoint, facingDirection, radius - radiusLoss);
@@ -403,7 +405,7 @@ namespace Telescopes
 
             // Now generate faces
             List<IndexTriangle> allIndices = new List<IndexTriangle>();
-            for (int i = 0; i < TelescopingSegment.cutsPerCylinder - 1; i++)
+            for (int i = 0; i < numCircles - 1; i++)
             {
                 List<IndexTriangle> tris = StitchCircles(circles[i], circles[i + 1]);
                 allIndices.AddRange(tris);

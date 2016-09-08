@@ -34,6 +34,12 @@ namespace Telescopes
             tiCurves = new List<TorsionImpulseCurve>();
 
             stage = CanvasStage.Spline;
+
+            /*
+            CatmullRomSpline crs = AddSpline(new Vector3(-2, 1, 0));
+            crs.points.Add(new Vector3(-1, 1, 0));
+            crs.points.Add(new Vector3(1, 1, 0));
+            crs.points.Add(new Vector3(2, 1, 0));*/
         }
 
         public void AddExistingSpline(CatmullRomSpline spline)
@@ -45,7 +51,7 @@ namespace Telescopes
             splines.Add(spline);
         }
 
-        void AddSpline(Vector3 firstPos)
+        CatmullRomSpline AddSpline(Vector3 firstPos)
         {
             GameObject splineObj = new GameObject();
             splineObj.transform.parent = transform;
@@ -59,6 +65,7 @@ namespace Telescopes
             spline.SetMaterial(DesignerController.instance.defaultLineMaterial);
 
             splineObj.name = "spline" + splines.Count;
+            return spline;
         }
 
         public DraggablePoint AddBulb(Vector3 pos)
@@ -238,9 +245,39 @@ namespace Telescopes
 
                     foreach (TorsionImpulseCurve tic in tiCurves)
                     {
-                        float startRadius = tic.NumSegments * Constants.DEFAULT_WALL_THICKNESS + 0.1f;
-                        if (tic.StartBulb) startRadius = tic.StartBulb.radius;
-                        TelescopingSegment seg = tic.MakeTelescope(startRadius);
+                        float startRadius = tic.NumSegments * Constants.DEFAULT_WALL_THICKNESS + 0.2f
+                            + (tic.ArcLength * Constants.TAPER_SLOPE);
+
+                        TelescopingSegment seg;
+
+                        if (tic.StartBulb && tic.EndBulb)
+                        {
+                            if (tic.EndBulb.radius > tic.StartBulb.radius)
+                            {
+                                startRadius = tic.EndBulb.radius;
+                                seg = tic.MakeTelescope(startRadius, reverse: true);
+                            }
+                            else
+                            {
+                                startRadius = tic.StartBulb.radius;
+                                seg = tic.MakeTelescope(startRadius);
+                            }
+                        }
+                        else if (tic.StartBulb && !tic.EndBulb)
+                        {
+                            startRadius = tic.StartBulb.radius;
+                            seg = tic.MakeTelescope(startRadius);
+                        }
+                        else if (!tic.StartBulb && tic.EndBulb)
+                        {
+                            startRadius = tic.EndBulb.radius;
+                            seg = tic.MakeTelescope(startRadius, reverse: true);
+                        }
+                        else
+                        {
+                            seg = tic.MakeTelescope(startRadius);
+                        }
+
                         seg.ExtendImmediate(1);
 
                         if (tic.StartBulb)

@@ -16,6 +16,19 @@ namespace Telescopes
 
         public int NumSegments { get { return segments.Count; } }
 
+        public float ArcLength
+        {
+            get
+            {
+                float len = 0;
+                foreach (CurveSegment seg in segments)
+                {
+                    len += seg.arcLength;
+                }
+                return len;
+            }
+        }
+
         public void InitFromData(List<float> impulses, List<float> arcSteps,
             float curvature, float torsion,
             OrthonormalFrame initialFrame, Vector3 initialPos)
@@ -227,45 +240,61 @@ namespace Telescopes
             return world;
         }
 
-        public TelescopingSegment MakeTelescope(float startRadius)
+        public TelescopingSegment MakeTelescope(float startRadius, bool reverse = false)
         {
             List<TelescopeParameters> tParams = new List<TelescopeParameters>();
 
-            CurveSegment initialSeg = segments[0];
+            CurveSegment initialSeg = (reverse) ? segments[segments.Count - 1] : segments[0];
 
-            TelescopeParameters initial = new TelescopeParameters(initialSeg.arcLength, startRadius,
-                Constants.DEFAULT_WALL_THICKNESS, initialSeg.curvature, initialSeg.torsion, initialSeg.impulse);
-            tParams.Add(initial);
-
-            float prevLength = initialSeg.arcLength;
             float wallThickness = Constants.DEFAULT_WALL_THICKNESS;
-
             float currRadius = startRadius;
+
+            TelescopeParameters initial = new TelescopeParameters(initialSeg.arcLength, currRadius,
+                Constants.DEFAULT_WALL_THICKNESS, initialSeg.curvature, initialSeg.torsion, 0);
+            tParams.Add(initial);
 
             for (int i = 1; i < segments.Count; i++)
             {
-                float nextLength = segments[i].arcLength;
-                float lengthDiff = nextLength - prevLength;
-                prevLength = nextLength;
+                int index = (reverse) ? segments.Count - 1 - i : i;
+
                 currRadius -= wallThickness;
 
-                TelescopeParameters p = new TelescopeParameters(segments[i].arcLength, currRadius,
-                    wallThickness, segments[i].curvature, segments[i].torsion,
-                    -segments[i].impulse * Mathf.Rad2Deg);
+                float curvature = (reverse) ? segments[index].curvature : segments[index].curvature;
+                float torsion = (reverse) ? segments[index].torsion : segments[index].torsion;
+                float impulse = (reverse) ? -segments[index + 1].impulse : -segments[index].impulse;
+                impulse *= Mathf.Rad2Deg;
+
+                TelescopeParameters p = new TelescopeParameters(segments[index].arcLength, currRadius,
+                    wallThickness, curvature, torsion, impulse);
                 tParams.Add(p);
             }
 
             GameObject obj = new GameObject();
             obj.name = "curveApproxTelescope";
-            obj.transform.position = segments[0].startPosition;
 
             TelescopingSegment segment = obj.AddComponent<TelescopingSegment>();
             segment.paramMode = SegmentParametersMode.Concrete;
             segment.material = DesignerController.instance.defaultTelescopeMaterial;
-            segment.initialDirection = segments[0].frame.T;
-            segment.initialUp = segments[0].frame.N;
+
+            if (reverse)
+            {
+                CurveSegment lastSeg = segments[segments.Count - 1];
+                obj.transform.position = TransformedHelixPoint(lastSeg, lastSeg.arcLength);
+
+                OrthonormalFrame initFrame = TransformedHelixFrame(lastSeg, lastSeg.arcLength);
+                segment.initialDirection = -initFrame.T;
+                segment.initialUp = initFrame.N;
+            }
+            else
+            {
+                obj.transform.position = segments[0].startPosition;
+                segment.initialDirection = segments[0].frame.T;
+                segment.initialUp = segments[0].frame.N;
+            }
 
             segment.MakeShellsFromConcrete(tParams);
+
+            if (reverse) segment.ReverseTelescope();
 
             return segment;
         }

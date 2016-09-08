@@ -19,6 +19,10 @@ namespace Telescopes
 
         public const float CURVATURE_SOLVE_THRESHOLD = 50;
         public const float CURVE_SEGMENT_THRESHOLD = 1;
+
+        public const int CUTS_PER_CYLINDER = 20;
+        public const int VERTS_PER_CIRCLE = 40;
+        public const int OVERHANG_CUTS = 4;
     }
 
 }

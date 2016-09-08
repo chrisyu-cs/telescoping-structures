@@ -38,10 +38,6 @@ namespace Telescopes
         [Tooltip("How thick the walls of the geometry are to be.")]
         public float wallThickness = Constants.DEFAULT_WALL_THICKNESS;
 
-        [Tooltip("The resolution of the mesh -- how many loops each cylinder should have.")]
-        public static int cutsPerCylinder = 10;
-        public static int verticesPerCircle = 40;
-
         public List<TelescopeParameters> parameters;
         public List<TelescopeParameters> concreteParameters;
 
@@ -185,6 +181,7 @@ namespace Telescopes
             TelescopeParameters currentParams = paramList[0];
 
             float accumulatedTaper = shell.getTaperLoss();
+            Debug.Log("taper loss = " + shell.getTaperLoss());
 
             for (int i = 1; i < paramList.Count; i++)
             {
@@ -197,6 +194,7 @@ namespace Telescopes
                 // Add it.
                 prevShell = addChildShell(prevShell, previousParams, currentParams);
                 accumulatedTaper += prevShell.getTaperLoss();
+                Debug.Log("taper loss = " + prevShell.getTaperLoss());
             }
 
             
