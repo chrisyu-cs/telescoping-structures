@@ -36,7 +36,8 @@ namespace Telescopes
         public LayerMask curveModeMask;
         public LayerMask curvatureModeMask;
 
-        public InputField filenameField;
+        public InputField canvasFilenameField;
+        public InputField objFilenameField;
 
         private float shootTime = 0f;
         private float shootDelay = 0.05f;
@@ -217,6 +218,16 @@ namespace Telescopes
                 }
             }
 
+            else if (Input.GetKeyDown("b") && RaycastShells(Input.mousePosition, out hitInfo))
+            {
+                DraggablePoint draggablePt = hitInfo.collider.GetComponent<DraggablePoint>();
+
+                if (draggablePt)
+                {
+                    draggablePt.ReplaceWithBulb();
+                }
+            }
+
             else if (Input.GetMouseButtonUp(0) || Input.GetMouseButtonUp(2))
             {
                 draggable = null;
@@ -346,12 +357,12 @@ namespace Telescopes
 
         public void WriteCurrentMeshOBJ()
         {
-            if (filenameField.text == "")
+            if (objFilenameField.text == "")
             {
                 Debug.Log("file name empty");
                 return;
             }
-            OBJWriter.ExportToOBJ(currentMesh.mesh, filenameField.text);
+            OBJWriter.ExportToOBJ(currentMesh.mesh, objFilenameField.text);
         }
 
         public void SetNumImpulses()

@@ -71,7 +71,7 @@ namespace Telescopes
 
         public void Save()
         {
-            string filename = DesignerController.instance.filenameField.text;
+            string filename = DesignerController.instance.objFilenameField.text;
             if (filename.Length < 1) return;
             Debug.Log("Save to " + filename);
 
@@ -85,7 +85,7 @@ namespace Telescopes
 
         public void Load()
         {
-            string filename = DesignerController.instance.filenameField.text;
+            string filename = DesignerController.instance.objFilenameField.text;
             if (filename.Length < 1) return;
             Debug.Log("Load from " + filename);
 

@@ -181,7 +181,6 @@ namespace Telescopes
             TelescopeParameters currentParams = paramList[0];
 
             float accumulatedTaper = shell.getTaperLoss();
-            Debug.Log("taper loss = " + shell.getTaperLoss());
 
             for (int i = 1; i < paramList.Count; i++)
             {
@@ -194,7 +193,6 @@ namespace Telescopes
                 // Add it.
                 prevShell = addChildShell(prevShell, previousParams, currentParams);
                 accumulatedTaper += prevShell.getTaperLoss();
-                Debug.Log("taper loss = " + prevShell.getTaperLoss());
             }
 
             
@@ -241,7 +239,6 @@ namespace Telescopes
         public void MakeShellsFromConcrete(List<TelescopeParameters> concreteParams)
         {
             initNumShells = concreteParams.Count;
-            Debug.Log("num shells = " + initNumShells);
             shells = new List<TelescopingShell>();
             initialDirection.Normalize();
 

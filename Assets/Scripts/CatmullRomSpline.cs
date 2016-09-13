@@ -25,6 +25,8 @@ namespace Telescopes
         public DraggablePoint StartBulb;
         public DraggablePoint EndBulb;
 
+        static int numSplinesCreated = 0;
+
         public int NumSegments { get { return segments.Count; } }
 
         void Awake()
@@ -112,6 +114,80 @@ namespace Telescopes
 
                 segments.Add(new CatmullRomSegment(p0, p1, p2, p3));
             }
+        }
+
+        public static CatmullRomSpline SplineOfPoints(List<Vector3> pts)
+        {
+            GameObject splineObj = new GameObject();
+            
+            CatmullRomSpline spline = splineObj.AddComponent<CatmullRomSpline>();
+            spline.points = new List<Vector3>();
+            spline.points.AddRange(pts);
+            spline.SetMaterial(DesignerController.instance.defaultLineMaterial);
+
+            spline.name = "spline" + numSplinesCreated;
+            numSplinesCreated++;
+
+            return spline;
+        }
+
+        public void ReplaceWithBulb(int index)
+        {
+            // Do nothing if this is an endpoint -- we can only insert
+            // a bulb at an interior point.
+            if (index <= 1) return;
+            if (index >= points.Count - 2) return;
+
+            List<Vector3> beforePoints = new List<Vector3>();
+            List<Vector3> afterPoints = new List<Vector3>();
+
+            // We want to copy all of the points up to the split position,
+            // and make a new spline out of that.
+            for (int i = 0; i < index; i++)
+            {
+                beforePoints.Add(points[i]);
+            }
+
+            // Add the split position as the last point
+            beforePoints.Add(points[index]);
+            // Add the last tangent handle as a point farther down the spline
+            Vector3 middleBefore = sample(index + 0.5f);
+            beforePoints.Add(middleBefore);
+
+            // We also want to make a new spline of all the points 
+            // starting after the split position.
+
+            // Add first tangent handle as coming before the split
+            Vector3 middleAfter = sample(index - 0.5f);
+            afterPoints.Add(middleAfter);
+            // Add the split position as the first point
+            afterPoints.Add(points[index]);
+
+            for (int i = index + 1; i < points.Count; i++)
+            {
+                afterPoints.Add(points[i]);
+            }
+
+            // Make the splines
+            CatmullRomSpline before = SplineOfPoints(beforePoints);
+            containingCanvas.AddExistingSpline(before);
+            
+            CatmullRomSpline after = SplineOfPoints(afterPoints);
+            containingCanvas.AddExistingSpline(after);
+            
+            // Connect splines to the bulb we just added
+            DraggablePoint bulb = containingCanvas.AddBulb(points[index]);
+            before.StartBulb = StartBulb;
+            before.EndBulb = bulb;
+
+            after.StartBulb = bulb;
+            after.EndBulb = EndBulb;
+
+            bulb.SetSize(0.1f);
+
+            // Delete the current spline that was split
+            containingCanvas.DeleteSpline(this);
+            Destroy(gameObject);
         }
 
         void FixSegmentsAroundIndex(int index)
@@ -394,6 +470,14 @@ namespace Telescopes
         // Update is called once per frame
         void Update()
         {
+            if (Input.GetKeyDown("home"))
+            {
+                foreach (Vector3 v in points)
+                {
+                    Debug.Log(v);
+                }
+            }
+
             if (Input.GetKey("left shift") && Input.GetKeyDown("p") && !parent)
             {
                 ConvertToDCurve();

@@ -84,7 +84,7 @@ namespace Telescopes
                     crs.EndBulb = null;
                 }
 
-                containingCanvas.RemoveBulb(this);
+                containingCanvas.DeleteBulb(this);
                 Destroy(gameObject);
             }
         }
@@ -98,6 +98,11 @@ namespace Telescopes
                 containingCanvas.mostRecentPoint = transform.position;
                 parentSpline.DuplicatePoint(index);
             }
+        }
+
+        public void ReplaceWithBulb()
+        {
+            if (parentSpline) parentSpline.ReplaceWithBulb(index);
         }
 
         public void SetSize(float f)

@@ -1,6 +1,11 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
 
+using System;
+using System.Runtime.Serialization;
+using System.Runtime.Serialization.Formatters.Binary;
+using System.IO;
+
 namespace Telescopes
 {
     public class SplineCanvas : MonoBehaviour
@@ -23,9 +28,8 @@ namespace Telescopes
         // Use this for initialization
         void Start()
         {
-            bulbs = new List<DraggablePoint>();
-
-            splines = new List<CatmullRomSpline>();
+            if (bulbs == null) bulbs = new List<DraggablePoint>();
+            if (splines == null) splines = new List<CatmullRomSpline>();
 
             dBulbs = new List<DCurveBulb>();
             dCurves = new List<DiscreteCurve>();
@@ -40,6 +44,45 @@ namespace Telescopes
             crs.points.Add(new Vector3(-1, 1, 0));
             crs.points.Add(new Vector3(1, 1, 0));
             crs.points.Add(new Vector3(2, 1, 0));*/
+        }
+
+        public void Reset()
+        {
+            foreach (CatmullRomSpline crs in splines)
+            {
+                Destroy(crs.gameObject);
+            }
+            splines.Clear();
+
+            foreach (DraggablePoint bulb in bulbs)
+            {
+                Destroy(bulb.gameObject);
+            }
+            bulbs.Clear();
+
+            foreach (DiscreteCurve dc in dCurves)
+            {
+                Destroy(dc.gameObject);
+            }
+            dCurves.Clear();
+
+            foreach (DCurveBulb bulb in dBulbs)
+            {
+                Destroy(bulb.gameObject);
+            }
+            dBulbs.Clear();
+
+            foreach (TorsionImpulseCurve tic in tiCurves)
+            {
+                Destroy(tic.gameObject);
+            }
+            tiCurves.Clear();
+
+            foreach (DCurveBulb bulb in tiBulbs)
+            {
+                Destroy(bulb.gameObject);
+            }
+            tiBulbs.Clear();
         }
 
         public void AddExistingSpline(CatmullRomSpline spline)
@@ -85,7 +128,7 @@ namespace Telescopes
             return point;
         }
 
-        public void RemoveBulb(DraggablePoint bulb)
+        public void DeleteBulb(DraggablePoint bulb)
         {
             bulbs.Remove(bulb);
         }
@@ -114,6 +157,17 @@ namespace Telescopes
 
         void Update()
         {
+            if (Input.GetKeyDown("page up"))
+            {
+                Debug.Log("up");
+                SaveData("canvasTest.bin");
+            }
+            if (Input.GetKeyDown("page down"))
+            {
+                Debug.Log("down");
+                ReloadFromFile("canvasTest.bin");
+            }
+
             if (stage == CanvasStage.Spline)
             {
                 if (Input.GetKey("left shift") && Input.GetKeyDown("b"))
@@ -306,6 +360,97 @@ namespace Telescopes
 
                     stage = CanvasStage.Telescope;
                 }
+            }
+        }
+
+        public void SaveData(string filename)
+        {
+            SplineCanvasData scd = new SplineCanvasData();
+
+            List<BulbData> bulbList = new List<BulbData>();
+            for (int i = 0; i < bulbs.Count; i++)
+            {
+                bulbs[i].index = i;
+                bulbList.Add(new BulbData(bulbs[i]));
+            }
+
+            List<SplineData> splineList = new List<SplineData>();
+            foreach (CatmullRomSpline crs in splines)
+            {
+                splineList.Add(new SplineData(crs));
+            }
+
+            scd.bulbs = bulbList;
+            scd.splines = splineList;
+
+            IFormatter formatter = new BinaryFormatter();
+            Stream stream = new FileStream(filename, FileMode.Create, FileAccess.Write, FileShare.None);
+            formatter.Serialize(stream, scd);
+            stream.Close();
+        }
+
+        public void SaveFromUI()
+        {
+            string name = DesignerController.instance.canvasFilenameField.text;
+            SaveData(name);
+        }
+
+        public void ReloadFromUI()
+        {
+            string name = DesignerController.instance.canvasFilenameField.text;
+            ReloadFromFile(name);
+        }
+
+        public void ReloadFromFile(string filename)
+        {
+            IFormatter formatter = new BinaryFormatter();
+            Stream stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read);
+            SplineCanvasData data = (SplineCanvasData)formatter.Deserialize(stream);
+            stream.Close();
+
+            ReloadFromData(data);
+        }
+
+        public void ReloadFromData(SplineCanvasData data)
+        {
+            // Clear everything
+            Reset();
+            bulbs.Clear();
+
+            foreach (BulbData bData in data.bulbs)
+            {
+                // Make bulbs at all the saved positions with the saved radii
+                DraggablePoint pt = AddBulb(bData.position.GetVector());
+                pt.SetSize(bData.radius);
+                pt.containingCanvas = this;
+            }
+
+            foreach (SplineData sData in data.splines)
+            {
+                // Convert the serialized vectors to Unity vectors
+                List<Vector3> posList = new List<Vector3>();
+                foreach (V3Serialize v3s in sData.points)
+                {
+                    posList.Add(v3s.GetVector());
+                }
+
+                // Make a spline with the same control points
+                CatmullRomSpline spline = CatmullRomSpline.SplineOfPoints(posList);
+                AddExistingSpline(spline);
+
+                // Set the begin/end bulbs
+                if (sData.startBulb >= 0)
+                {
+                    spline.StartBulb = bulbs[sData.startBulb];
+                    Debug.Log("bulb " + sData.startBulb + " = " + bulbs[sData.startBulb].transform.position);
+                }
+                if (sData.endBulb >= 0)
+                {
+                    spline.EndBulb = bulbs[sData.endBulb];
+                    Debug.Log("bulb " + sData.endBulb + " = " + bulbs[sData.endBulb].transform.position);
+                }
+                
+                Debug.Log("attached bulbs: " + sData.startBulb + ", " + sData.endBulb);
             }
         }
     }

@@ -67,6 +67,27 @@ namespace Telescopes
             }
         }
 
+        float FitSphere(Vector3 position)
+        {
+            if (!referenceMesh)
+            {
+                Debug.Log("no reference mesh: " + referenceMesh);
+                return 0.1f;
+            }
+
+            float maxDist = Vector3.Distance(position, referenceMesh.Vertices[0].position);
+
+            foreach (Vertex v in referenceMesh.Vertices)
+            {
+                Vector3 vert = v.position;
+                maxDist = Mathf.Min(maxDist, Vector3.Distance(vert, position));
+            }
+
+            Debug.Log("max dist = " + maxDist);
+
+            return maxDist;
+        }
+
         void DepthFirstSearch(int initial)
         {
             GetCanvas();
@@ -118,6 +139,7 @@ namespace Telescopes
                 {
                     Vector3 pos = transform.rotation * mesh.vertices[next] + transform.position;
                     bulbAtStart = outputCanvas.AddBulb(pos);
+                    //bulbAtStart.SetSize(FitSphere(mesh.vertices[next]));
                     bulbAtStart.SetSize(0.1f);
 
                     bulbDict.Add(next, bulbAtStart);
@@ -160,6 +182,7 @@ namespace Telescopes
                 {
                     Vector3 pos = transform.rotation * mesh.vertices[next] + transform.position;
                     DraggablePoint bulb = outputCanvas.AddBulb(pos);
+                    //bulb.SetSize(FitSphere(mesh.vertices[next]));
                     bulb.SetSize(0.1f);
                     bulbDict.Add(next, bulb);
 

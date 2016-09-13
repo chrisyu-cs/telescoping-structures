@@ -33,3 +33,4 @@ curvatureOpt.log
 
 # Output meshes
 *.stl
+*.bin

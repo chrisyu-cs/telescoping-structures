@@ -24,6 +24,8 @@ namespace Telescopes
         FastPriorityQueue<FaceNode> PQ;
         UnionFind<VertexNode> uf;
 
+        public HalfEdgeMesh referenceMesh;
+
         bool doCollapse;
         float[] edgeCosts;
 

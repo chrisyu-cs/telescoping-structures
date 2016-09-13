@@ -12,6 +12,181 @@ namespace Telescopes
 {
     public partial class DiscreteCurve
     {
+        private Matrix<double> laplacianBE;
+
+        Vector3 AngleWrtPosition(int angleIndex, int posIndex)
+        {
+            int diff = Mathf.Abs(angleIndex - posIndex);
+            if (diff > 1) return Vector3.zero;
+
+            Vector3 a = discretizedPoints[angleIndex].position;
+            Vector3 b = discretizedPoints[angleIndex + 1].position;
+            Vector3 c = (angleIndex < 1) ? startingPoint : discretizedPoints[angleIndex - 1].position;
+
+            Vector3 b_a = b - a;
+            Vector3 c_a = c - a;
+            Vector3 N = Vector3.Cross(b_a, c_a);
+            float Nmag = N.magnitude;
+            if (Nmag < 1e-6) return Vector3.zero;
+            N.Normalize();
+
+            Vector3 dWdb = Vector3.Cross(N, b_a) / b_a.sqrMagnitude;
+            Vector3 dWdc = -Vector3.Cross(N, c_a) / c_a.sqrMagnitude;
+            Vector3 dWda = -dWdb - dWdc;
+
+            if (posIndex < angleIndex)
+            {
+                return dWdc;
+            }
+            else if (posIndex > angleIndex)
+            {
+                return dWdb;
+            }
+            else
+            {
+                return dWda;
+            }
+        }
+
+        float BendAngle(int index)
+        {
+            if (index >= discretizedPoints.Count - 1) return 0;
+
+            Vector3 prev = (index < 1) ? startingPoint : discretizedPoints[index - 1].position;
+            Vector3 next = discretizedPoints[index + 1].position;
+            Vector3 current = discretizedPoints[index].position;
+
+            Vector3 prevVec = current - prev;
+            Vector3 nextVec = next - current;
+            Vector3 normal = Vector3.Cross(prevVec, nextVec).normalized;
+
+            return TelescopeUtils.AngleBetween(prevVec, nextVec, normal) * Mathf.Deg2Rad;
+        }
+
+        void CurvaturePositionFlow(float delta)
+        {
+            foreach (DCurvePoint dcp in discretizedPoints)
+            {
+                dcp.currentGradient = Vector3.zero;
+            }
+
+            for (int i = 1; i < discretizedPoints.Count - 2; i++)
+            {
+                // float w_minus2 = (i < 2) ? 0 : BendAngle(i - 2);
+                float w_minus1 = BendAngle(i - 1);
+                float w_i = BendAngle(i);
+                float w_plus1 = BendAngle(i + 1);
+
+                // float w_plus2 = (i >= discretizedPoints.Count - 2) ? 0 : BendAngle(i + 2);
+
+                Vector3 derivMinus1 = AngleWrtPosition(i - 1, i);
+                Vector3 deriv_i = AngleWrtPosition(i, i);
+                Vector3 derivPlus1 = AngleWrtPosition(i + 1, i);
+
+                Vector3 gradient = Vector3.zero;
+
+                //if (i >= 1) gradient += 2 * (w_minus1 - w_minus2) * derivMinus1;
+                gradient += 2 * (w_i - w_minus1) * (deriv_i - derivMinus1);
+                gradient += 2 * (w_plus1 - w_i) * (derivPlus1 - deriv_i);
+                //gradient += 2 * (w_plus2 - w_plus1) * (-derivPlus1);
+
+                discretizedPoints[i].currentGradient = gradient;
+            }
+
+            float gradientMag = 0;
+
+            foreach (DCurvePoint dcp in discretizedPoints)
+            {
+                dcp.position -= (delta * dcp.currentGradient);
+                gradientMag += dcp.currentGradient.sqrMagnitude;
+            }
+
+            gradientMag = Mathf.Sqrt(gradientMag);
+            Debug.Log("magnitude = " + gradientMag);
+
+            curvePoints = new List<Vector3>();
+            curvePoints.Add(startingPoint);
+
+            foreach (DCurvePoint dcp in discretizedPoints)
+            {
+                curvePoints.Add(dcp.position);
+            }
+
+            lineRender = GetComponent<LineRenderer>();
+            lineRender.SetVertexCount(curvePoints.Count);
+            lineRender.SetPositions(curvePoints.ToArray());
+
+            ComputeFrenetFrames();
+        }
+
+        void CurvatureFlow(float delta)
+        {
+            if (discretizedPoints.Count <= 2) return;
+            if (laplacianBE == null)
+            {
+                Matrix<double> laplacian = NumericalUtils.SpaceCurveLaplacian(discretizedPoints.Count);
+                laplacianBE = NumericalUtils.LaplacianToImplicitEuler(laplacian, delta);
+            }
+            List<float> rotationAngles = discretizedPoints.ConvertAll<float>(DCurvePoint.ToBendAngle);
+            Vector<double> rhs = NumericalUtils.VectorFromList(rotationAngles);
+            Vector<double> solved = laplacianBE.Solve(rhs);
+
+            for (int i = 0; i < rotationAngles.Count; i++)
+            {
+                discretizedPoints[i].bendingAngle = (float)solved[i];
+            }
+            ReconstructAndAlign();
+        }
+
+        void CurvatureToAverage()
+        {
+            float totalAngle = 0;
+            foreach (DCurvePoint dcp in discretizedPoints)
+            {
+                totalAngle += dcp.bendingAngle;
+            }
+            float averageAngle = totalAngle / discretizedPoints.Count;
+            foreach (DCurvePoint dcp in discretizedPoints)
+            {
+                dcp.bendingAngle = averageAngle;
+            }
+            ReconstructAndAlign();
+        }
+
+        void TorsionFlow(float delta)
+        {
+            if (discretizedPoints.Count <= 2) return;
+            if (laplacianBE == null)
+            {
+                Matrix<double> laplacian = NumericalUtils.SpaceCurveLaplacian(discretizedPoints.Count);
+                laplacianBE = NumericalUtils.LaplacianToImplicitEuler(laplacian, delta);
+            }
+            List<float> twistAngles = discretizedPoints.ConvertAll<float>(DCurvePoint.ToTwistAngle);
+            Vector<double> rhs = NumericalUtils.VectorFromList(twistAngles);
+            Vector<double> solved = laplacianBE.Solve(rhs);
+
+            for (int i = 0; i < twistAngles.Count; i++)
+            {
+                discretizedPoints[i].twistingAngle = (float)(solved[i]);
+            }
+            ReconstructAndAlign();
+        }
+
+        void TorsionToAverage()
+        {
+            float totalAngle = 0;
+            for (int i = 1; i < discretizedPoints.Count; i++)
+            {
+                totalAngle += discretizedPoints[i].twistingAngle;
+            }
+            float averageAngle = totalAngle / (discretizedPoints.Count - 1);
+            for (int i = 1; i < discretizedPoints.Count; i++)
+            {
+                discretizedPoints[i].twistingAngle = averageAngle;
+            }
+            ReconstructAndAlign();
+        }
+
         public void SegmentCurvature()
         {
             List<float> curvatures = SolveCurvature(Constants.CURVATURE_SOLVE_THRESHOLD);

@@ -407,75 +407,6 @@ namespace Telescopes
             }
         }
 
-        private Matrix<double> laplacianBE;
-
-        void CurvatureFlow(float delta)
-        {
-            if (discretizedPoints.Count <= 2) return;
-            if (laplacianBE == null)
-            {
-                Matrix<double> laplacian = NumericalUtils.SpaceCurveLaplacian(discretizedPoints.Count);
-                laplacianBE = NumericalUtils.LaplacianToImplicitEuler(laplacian, delta);
-            }
-            List<float> rotationAngles = discretizedPoints.ConvertAll<float>(DCurvePoint.ToBendAngle);
-            Vector<double> rhs = NumericalUtils.VectorFromList(rotationAngles);
-            Vector<double> solved = laplacianBE.Solve(rhs);
-
-            for (int i = 0; i < rotationAngles.Count; i++)
-            {
-                discretizedPoints[i].bendingAngle = (float)solved[i];
-            }
-            ReconstructAndAlign();
-        }
-
-        void CurvatureToAverage()
-        {
-            float totalAngle = 0;
-            foreach (DCurvePoint dcp in discretizedPoints)
-            {
-                totalAngle += dcp.bendingAngle;
-            }
-            float averageAngle = totalAngle / discretizedPoints.Count;
-            foreach (DCurvePoint dcp in discretizedPoints)
-            {
-                dcp.bendingAngle = averageAngle;
-            }
-            ReconstructAndAlign();
-        }
-
-        void TorsionFlow(float delta)
-        {
-            if (discretizedPoints.Count <= 2) return;
-            if (laplacianBE == null)
-            {
-                Matrix<double> laplacian = NumericalUtils.SpaceCurveLaplacian(discretizedPoints.Count);
-                laplacianBE = NumericalUtils.LaplacianToImplicitEuler(laplacian, delta);
-            }
-            List<float> twistAngles = discretizedPoints.ConvertAll<float>(DCurvePoint.ToTwistAngle);
-            Vector<double> rhs = NumericalUtils.VectorFromList(twistAngles);
-            Vector<double> solved = laplacianBE.Solve(rhs);
-
-            for (int i = 0; i < twistAngles.Count; i++)
-            {
-                discretizedPoints[i].twistingAngle = (float)(solved[i]);
-            }
-            ReconstructAndAlign();
-        }
-
-        void TorsionToAverage()
-        {
-            float totalAngle = 0;
-            for (int i = 1; i < discretizedPoints.Count; i++)
-            {
-                totalAngle += discretizedPoints[i].twistingAngle;
-            }
-            float averageAngle = totalAngle / (discretizedPoints.Count - 1);
-            for (int i = 1; i < discretizedPoints.Count; i++)
-            {
-                discretizedPoints[i].twistingAngle = averageAngle;
-            }
-            ReconstructAndAlign();
-        }
 
         // Update is called once per frame
         void Update()
@@ -519,9 +450,11 @@ namespace Telescopes
 
             if (flowMode == FlowMode.CurvatureFlow)
             {
+                CurvaturePositionFlow(0.001f);
+                /*
                 CurvatureFlow(1f);
                 ComputeFrenetFrames();
-                ComputeBishopFrames();
+                ComputeBishopFrames();*/
             }
 
             else if (flowMode == FlowMode.TorsionFlow)
@@ -692,8 +625,6 @@ namespace Telescopes
                 arcSteps.Add(arcPoints[i + 1] - arcPoints[i]);
             }
 
-            Debug.Log("Frame: " + startingTangent + ", " + startingNormal + ", " + startingBinormal);
-
             GameObject obj = new GameObject();
             obj.name = "TorsionApproxCurve";
             TorsionImpulseCurve impulseCurve = obj.AddComponent<TorsionImpulseCurve>();
@@ -727,6 +658,7 @@ namespace Telescopes
         public float cumulativeTwist;
 
         public Vector3 position;
+        public Vector3 currentGradient;
 
         public Vector3 tangent
         {
