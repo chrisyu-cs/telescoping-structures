@@ -55,7 +55,7 @@ namespace Telescopes
 
                 foreach (IParameterizedCurve dc in childCurves)
                 {
-                    if (dc != null) dc.RotateAndOffset(rotationBetween, newCenter, radius);
+                    if (dc != null) dc.RotateAndOffset(Quaternion.Inverse(rotationBetween), newCenter, radius);
                 }
             }
         }

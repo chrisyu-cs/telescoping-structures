@@ -32,12 +32,6 @@ namespace Telescopes
         void Start()
         {
             flowMode = FlowMode.None;
-
-            FrenetTracer[] fts = FindObjectsOfType<FrenetTracer>();
-            foreach (var ft in fts)
-            {
-                ft.dCurve = this;
-            }
         }
 
         // Compute all internal bending axes/angles from a list of points.
@@ -68,7 +62,7 @@ namespace Telescopes
 
                 // Compute bending angles (discrete curvature).
                 float dot = Vector3.Dot(previousVec, nextVec);
-                float bendAngle = (dot > 0.9999f) ? 0 : Mathf.Rad2Deg * Mathf.Acos(dot);
+                float bendAngle = (dot >= 1) ? 0 : Mathf.Rad2Deg * Mathf.Acos(dot);
 
                 // Compute twisting angles (discrete torsion).
                 float twistAngle;
@@ -80,6 +74,7 @@ namespace Telescopes
                 {
                     twistAngle = TelescopeUtils.AngleBetween(prevBinormal, curvatureBinormal, previousVec);
                 }
+                Debug.Log("bend angle = " + bendAngle);
 
                 if (float.IsNaN(bendAngle)) throw new System.Exception("Bend angle is nan, dot = " + dot);
                 if (float.IsNaN(twistAngle)) throw new System.Exception("Twist angle is nan");
@@ -450,11 +445,11 @@ namespace Telescopes
 
             if (flowMode == FlowMode.CurvatureFlow)
             {
-                CurvaturePositionFlow(0.001f);
-                /*
+                //CurvaturePositionFlow(0.001f);
+                
                 CurvatureFlow(1f);
                 ComputeFrenetFrames();
-                ComputeBishopFrames();*/
+                ComputeBishopFrames();
             }
 
             else if (flowMode == FlowMode.TorsionFlow)

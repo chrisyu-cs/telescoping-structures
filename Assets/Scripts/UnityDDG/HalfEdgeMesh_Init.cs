@@ -9,7 +9,6 @@ namespace UnityDDG
     {
         public void InitFromMesh(Mesh m)
         {
-            Dictionary<EdgePair, TriangleTriple> edgesToTriangles = new Dictionary<EdgePair, TriangleTriple>();
             Dictionary<EdgePair, HalfEdge> edgesToHEs = new Dictionary<EdgePair, HalfEdge>();
 
             Vector3[] meshVertices = m.vertices;
@@ -32,10 +31,6 @@ namespace UnityDDG
                 EdgePair e2 = new EdgePair(i2, i3);
                 EdgePair e3 = new EdgePair(i3, i1);
 
-                edgesToTriangles.Add(e1, tri);
-                edgesToTriangles.Add(e2, tri);
-                edgesToTriangles.Add(e3, tri);
-
                 // Also map each vertex to the set of edges originating from it.
                 // We need this to traverse boundary loops later.
                 if (vertsToEdges[i1] == null) vertsToEdges[i1] = new List<EdgePair>();
@@ -45,7 +40,6 @@ namespace UnityDDG
                 if (vertsToEdges[i3] == null) vertsToEdges[i3] = new List<EdgePair>();
                 vertsToEdges[i3].Add(e3);
             }
-            int numInteriorEdges = edgesToTriangles.Count / 2;
 
             Vertex[] heVertices = new Vertex[m.vertices.Length];
             List<Face> heFaces = new List<Face>();

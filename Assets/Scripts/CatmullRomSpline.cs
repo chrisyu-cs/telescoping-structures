@@ -269,9 +269,21 @@ namespace Telescopes
                 segments[i].addSamplePointsTo(renderPoints, pointsPerSegment);
             }
             segments[segments.Count - 1].addLastPointTo(renderPoints);
+            
+            foreach (Vector3 p in renderPoints)
+            {
+                if (float.IsNaN(p.x))
+                {
+                    Debug.Log("Deleted spline with NaN");
+                    containingCanvas.DeleteSpline(this);
+                    Destroy(gameObject);
+                    return;
+                }
+            }
 
             lineRender.SetVertexCount(renderPoints.Count);
             lineRender.SetPositions(renderPoints.ToArray());
+            lineRender.SetColors(Color.white, Color.red);
 
             needsUpdate = false;
         }
@@ -319,7 +331,7 @@ namespace Telescopes
             int segNum = Mathf.FloorToInt(t);
             if (segNum >= segments.Count)
             {
-                return segments[segments.Count - 1].sample(1);
+                return segments[segments.Count - 1].sample(1f);
             }
             float segT = t - segNum;
             return segments[segNum].sample(segT);
@@ -438,6 +450,18 @@ namespace Telescopes
                 allPoints.Add(nextPoint);
                 curT = nextT;
             }
+
+            /*
+            GameObject sampledPoints = new GameObject();
+            sampledPoints.name = "sampledPoints";
+            LineRenderer sampledLine = sampledPoints.AddComponent<LineRenderer>();
+
+            sampledLine.material = DesignerController.instance.defaultLineMaterial;
+            sampledLine.SetVertexCount(allPoints.Count);
+            sampledLine.SetPositions(allPoints.ToArray());
+            sampledLine.SetColors(Color.red, Color.red);
+            sampledLine.SetWidth(0.1f, 0.1f);
+            */
 
             return allPoints;
         }
@@ -570,6 +594,9 @@ namespace Telescopes
 
         public Vector3 sample(float t)
         {
+            if (t == 0) return P1;
+            if (t == 1) return P2;
+
             float scaledT = t * t2 + (1 - t) * t1;
             Vector3 p = sampleRaw(scaledT);
             return p;

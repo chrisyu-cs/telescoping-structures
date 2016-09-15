@@ -295,6 +295,9 @@ namespace Telescopes
                     {
                         TelescopeBulb bulb = TelescopeUtils.bulbOfRadius(dcb.transform.position, dcb.radius);
                         bulbDict.Add(dcb, bulb);
+
+                        float scaleAmount = Mathf.Sqrt(2);
+                        bulb.transform.localScale = new Vector3(dcb.radius, dcb.radius, dcb.radius) * 2f * scaleAmount;
                     }
 
                     foreach (TorsionImpulseCurve tic in tiCurves)
@@ -442,15 +445,11 @@ namespace Telescopes
                 if (sData.startBulb >= 0)
                 {
                     spline.StartBulb = bulbs[sData.startBulb];
-                    Debug.Log("bulb " + sData.startBulb + " = " + bulbs[sData.startBulb].transform.position);
                 }
                 if (sData.endBulb >= 0)
                 {
                     spline.EndBulb = bulbs[sData.endBulb];
-                    Debug.Log("bulb " + sData.endBulb + " = " + bulbs[sData.endBulb].transform.position);
                 }
-                
-                Debug.Log("attached bulbs: " + sData.startBulb + ", " + sData.endBulb);
             }
         }
     }
