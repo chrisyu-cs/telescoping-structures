@@ -14,6 +14,8 @@ namespace Telescopes
         public DCurveBulb StartBulb;
         public DCurveBulb EndBulb;
 
+        private static int numScopes = 0;
+
         public int NumSegments { get { return segments.Count; } }
 
         public float ArcLength
@@ -270,7 +272,7 @@ namespace Telescopes
             }
 
             GameObject obj = new GameObject();
-            obj.name = "curveApproxTelescope";
+            obj.name = "telescope" + (numScopes++);
 
             TelescopingSegment segment = obj.AddComponent<TelescopingSegment>();
             segment.paramMode = SegmentParametersMode.Concrete;

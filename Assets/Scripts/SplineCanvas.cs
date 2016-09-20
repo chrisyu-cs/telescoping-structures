@@ -251,6 +251,7 @@ namespace Telescopes
                     {
                         TorsionImpulseCurve impulseCurve = dc.MakeCurve();
                         tiCurves.Add(impulseCurve);
+                        impulseCurve.transform.parent = transform;
 
                         if (dc.parentBulb)
                         {
@@ -291,13 +292,21 @@ namespace Telescopes
                 {
                     Dictionary<DCurveBulb, TelescopeBulb> bulbDict = new Dictionary<DCurveBulb, TelescopeBulb>();
 
+                    bool made = false;
+
                     foreach (DCurveBulb dcb in tiBulbs)
                     {
                         TelescopeBulb bulb = TelescopeUtils.bulbOfRadius(dcb.transform.position, dcb.radius);
+
+                        if (!made)
+                        {
+                            made = true;
+                            bulb.doOptimize = true;
+                        }
                         bulbDict.Add(dcb, bulb);
 
                         float scaleAmount = Mathf.Sqrt(2);
-                        bulb.transform.localScale = new Vector3(dcb.radius, dcb.radius, dcb.radius) * 2f * scaleAmount;
+                        bulb.Radius = bulb.Radius * scaleAmount;
                     }
 
                     foreach (TorsionImpulseCurve tic in tiCurves)
@@ -342,6 +351,8 @@ namespace Telescopes
                             TelescopeBulb bulb = bulbDict[tic.StartBulb];
                             seg.keepLocalPositionOnStart = true;
                             seg.SetParent(bulb);
+
+                            bulb.childSegments.Add(seg);
                         }
                         if (tic.EndBulb)
                         {
@@ -362,6 +373,12 @@ namespace Telescopes
                     }
 
                     stage = CanvasStage.Telescope;
+
+                    foreach (TelescopeBulb bulb in bulbDict.Values)
+                    {
+                        Debug.Log("Bulb " + bulb.name + " has parent " + bulb.parentSegment
+                            + " and " + bulb.childSegments.Count + " children");
+                    }
                 }
             }
         }

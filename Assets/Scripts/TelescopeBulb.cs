@@ -1,10 +1,9 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
-using System;
 
 namespace Telescopes
 {
-    public class TelescopeBulb : TelescopeElement
+    public partial class TelescopeBulb : TelescopeElement
     {
         public TelescopeElement parent;
         public int parentElementNum;
@@ -14,11 +13,23 @@ namespace Telescopes
 
         public bool keepLocalPositionOnStart = false;
 
+        public TelescopingSegment parentSegment;
+        public List<TelescopingSegment> childSegments;
+
+        public GameObject sphereObject;
+
+        public bool doOptimize = true;
+
         public float Radius
         {
             get
             {
-                return transform.localScale.x / 2;
+                return sphereObject.transform.localScale.x / 2;
+            }
+
+            set
+            {
+                sphereObject.transform.localScale = new Vector3(value * 2, value * 2, value * 2);
             }
         }
 
@@ -55,6 +66,8 @@ namespace Telescopes
         {
             parent = segment;
             parentElementNum = segment.shells.Count - 1;
+
+            parentSegment = segment;
             //SetParent(segment, segment.shells.Count - 1, 1);
         }
 
@@ -168,7 +181,7 @@ namespace Telescopes
 
         public void SetMaterial(Material m)
         {
-            if (!meshRenderer) meshRenderer = GetComponent<MeshRenderer>();
+            if (!meshRenderer) meshRenderer = sphereObject.GetComponent<MeshRenderer>();
             meshRenderer.material = m;
         }
 
@@ -211,8 +224,26 @@ namespace Telescopes
                 float error = OverlapError();
                 Color c = Color.Lerp(Color.white, Color.red, error);
 
-                if (!meshRenderer) meshRenderer = GetComponent<MeshRenderer>();
+                if (!meshRenderer) meshRenderer = sphereObject.GetComponent<MeshRenderer>();
                 meshRenderer.material.color = c;
+            }
+            
+            if (doOptimize && Input.GetKeyDown("]"))
+            {
+                OptimizeCollisions();
+                /*
+                foreach (TelescopingSegment seg in childSegments)
+                {
+                    Vector3 localTangent = seg.LocalContactTangent();
+                    Vector3 worldTangent = transform.rotation * localTangent;
+
+                    List<Vector3> points = new List<Vector3>();
+                    points.Add(transform.position);
+                    points.Add(transform.position + 10f * worldTangent);
+
+                    TelescopeUtils.DisplayLine(points);
+                }
+                */
             }
         }
     }

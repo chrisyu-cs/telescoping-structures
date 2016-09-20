@@ -336,6 +336,46 @@ namespace Telescopes
             }
         }
 
+        public Vector3 WorldEndTangent()
+        {
+            TelescopingShell lastShell = shells[shells.Count - 1];
+
+            if (!Reversed)
+            {
+                Quaternion baseQ = lastShell.transform.rotation;
+                Quaternion local = lastShell.getLocalRotationAlongPath(1);
+                Quaternion combined = baseQ * local;
+
+                Vector3 worldForward = combined * Vector3.forward;
+                return -worldForward;
+            }
+
+            else
+            {
+                Quaternion local = lastShell.transform.rotation;
+                return local * Vector3.forward;
+            }
+        }
+
+        public Vector3 LocalContactTangent()
+        {
+            TelescopingShell firstShell = shells[0];
+            if (!Reversed)
+            {
+                Quaternion local = firstShell.transform.localRotation;
+                return local * Vector3.forward;
+            }
+            else
+            {
+                Quaternion baseQ = firstShell.transform.localRotation;
+                Quaternion pathQ = firstShell.getLocalRotationAlongPath(1);
+
+                Quaternion local = baseQ * pathQ;
+
+                return -(local * Vector3.forward);
+            }
+        }
+
         public void ReverseTelescope()
         {
             Debug.Log("Reverse");

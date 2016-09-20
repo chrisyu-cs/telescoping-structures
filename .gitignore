@@ -30,7 +30,9 @@ sysinfo.txt
 # Gurobi log
 impulseQP.log
 curvatureOpt.log
+bulbOpt.log
 
 # Output meshes
 *.stl
 *.bin
+*.canvas

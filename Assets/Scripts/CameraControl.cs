@@ -23,11 +23,6 @@ namespace Telescopes
 
         void ProcessMove()
         {
-            if (Input.GetKeyDown("f"))
-            {
-                locked = !locked;
-            }
-
             float up = Input.GetAxis("Vertical");
             float right = Input.GetAxis("Horizontal");
             float rmb = Input.GetAxis("Jump");

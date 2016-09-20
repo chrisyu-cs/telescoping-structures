@@ -451,18 +451,6 @@ namespace Telescopes
                 curT = nextT;
             }
 
-            /*
-            GameObject sampledPoints = new GameObject();
-            sampledPoints.name = "sampledPoints";
-            LineRenderer sampledLine = sampledPoints.AddComponent<LineRenderer>();
-
-            sampledLine.material = DesignerController.instance.defaultLineMaterial;
-            sampledLine.SetVertexCount(allPoints.Count);
-            sampledLine.SetPositions(allPoints.ToArray());
-            sampledLine.SetColors(Color.red, Color.red);
-            sampledLine.SetWidth(0.1f, 0.1f);
-            */
-
             return allPoints;
         }
 

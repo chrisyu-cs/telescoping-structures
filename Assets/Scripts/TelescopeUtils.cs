@@ -272,14 +272,25 @@ namespace Telescopes
             return radius * angle;
         }
 
+        private static int BulbCount = 0;
+
         public static TelescopeBulb bulbOfRadius(Vector3 position, float radius)
         {
-            GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            obj.transform.localScale = new Vector3(2 * radius, 2 * radius, 2 * radius);
-            obj.name = "bulb";
-            TelescopeBulb bulb = obj.AddComponent<TelescopeBulb>();
+            GameObject sphereObj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            sphereObj.transform.localScale = new Vector3(2 * radius, 2 * radius, 2 * radius);
+            sphereObj.name = "bulbSphere" + BulbCount;
+
+            GameObject bulbObj = new GameObject();
+            bulbObj.name = "bulb" + (BulbCount++);
+            sphereObj.transform.parent = bulbObj.transform;
+
+            TelescopeBulb bulb = bulbObj.AddComponent<TelescopeBulb>();
+            bulb.sphereObject = sphereObj;
             bulb.transform.position = position;
             bulb.SetMaterial(DesignerController.instance.defaultTelescopeMaterial);
+
+            bulb.childSegments = new List<TelescopingSegment>();
+
             return bulb;
         }
 
@@ -489,6 +500,19 @@ namespace Telescopes
             Math3d.ClosestPointsOnTwoLines(out closest1, out closest2, v12base, v12perp, v13base, v13perp);
 
             return (closest1 + closest2) / 2;
+        }
+
+        public static void DisplayLine(List<Vector3> linePoints)
+        {
+            GameObject sampledPoints = new GameObject();
+            sampledPoints.name = "points";
+            LineRenderer sampledLine = sampledPoints.AddComponent<LineRenderer>();
+
+            sampledLine.material = DesignerController.instance.defaultLineMaterial;
+            sampledLine.SetVertexCount(linePoints.Count);
+            sampledLine.SetPositions(linePoints.ToArray());
+            sampledLine.SetColors(Color.red, Color.red);
+            sampledLine.SetWidth(0.1f, 0.1f);
         }
     }
 }

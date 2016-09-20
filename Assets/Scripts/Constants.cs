@@ -22,7 +22,7 @@ namespace Telescopes
 
         public const int CUTS_PER_CYLINDER = 20;
         public const int VERTS_PER_CIRCLE = 40;
-        public const int OVERHANG_CUTS = 4;
+        public const int OVERHANG_CUTS = 0;
     }
 
 }
