@@ -65,6 +65,12 @@ namespace Telescopes
             createSpheres();
             MoveEndpoints();
             updateRenderPoints();
+
+            if (!containingCanvas)
+            {
+                containingCanvas = FindObjectOfType<SplineCanvas>();
+                containingCanvas.AddExistingSpline(this);
+            }
         }
 
         public void DeletePoint(int index)

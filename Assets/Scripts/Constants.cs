@@ -5,10 +5,12 @@ namespace Telescopes
 {
     public static class Constants
     {
+        public const float MM_PER_UNIT = 40f;
+
         public const float DEFAULT_WALL_THICKNESS = 0.05f;
         public const float INITIAL_SPLINE_SIZE = 0.25f;
 
-        public const float TAPER_SLOPE = 0f;
+        public const float TAPER_SLOPE = 0.025f;
         public const int ARC_SAMPLES = 10;
         public const float COSMETIC_TAPER_RATIO = 0f;
 
@@ -21,8 +23,8 @@ namespace Telescopes
         public const float CURVE_SEGMENT_THRESHOLD = 1;
 
         public const int CUTS_PER_CYLINDER = 20;
-        public const int VERTS_PER_CIRCLE = 40;
-        public const int OVERHANG_CUTS = 0;
+        public const int VERTS_PER_CIRCLE = 80;
+        public const int OVERHANG_CUTS = 4;
     }
 
 }

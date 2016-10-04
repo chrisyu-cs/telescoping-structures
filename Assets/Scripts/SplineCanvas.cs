@@ -46,6 +46,9 @@ namespace Telescopes
             crs.points.Add(new Vector3(2, 1, 0));*/
         }
 
+        /// <summary>
+        /// Deletes everything from this canvas.
+        /// </summary>
         public void Reset()
         {
             foreach (CatmullRomSpline crs in splines)
@@ -85,6 +88,11 @@ namespace Telescopes
             tiBulbs.Clear();
         }
 
+        /// <summary>
+        /// Add a spline object that already exists to this canvas, without
+        /// adding any new control points.
+        /// </summary>
+        /// <param name="spline">The existing spline object.</param>
         public void AddExistingSpline(CatmullRomSpline spline)
         {
             if (splines == null) splines = new List<CatmullRomSpline>();
@@ -94,6 +102,12 @@ namespace Telescopes
             splines.Add(spline);
         }
 
+        /// <summary>
+        /// Add a new spline object to this canvas, and add an initial control
+        /// point for it.
+        /// </summary>
+        /// <param name="firstPos">The position of the first control point.</param>
+        /// <returns></returns>
         CatmullRomSpline AddSpline(Vector3 firstPos)
         {
             GameObject splineObj = new GameObject();
@@ -111,6 +125,11 @@ namespace Telescopes
             return spline;
         }
 
+        /// <summary>
+        /// Add a new bulb to this canvas at the given location.
+        /// </summary>
+        /// <param name="pos">The position of the bulb.</param>
+        /// <returns></returns>
         public DraggablePoint AddBulb(Vector3 pos)
         {
             GameObject bulbObj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -128,6 +147,10 @@ namespace Telescopes
             return point;
         }
 
+        /// <summary>
+        /// Remove the given bulb from this canvas.
+        /// </summary>
+        /// <param name="bulb"></param>
         public void DeleteBulb(DraggablePoint bulb)
         {
             bulbs.Remove(bulb);
@@ -138,12 +161,21 @@ namespace Telescopes
             return Camera.main.WorldToViewportPoint(mostRecentPoint).z;
         }
 
-
+        /// <summary>
+        /// Remove the given spline from this canvas.
+        /// </summary>
+        /// <param name="crs"></param>
         public void DeleteSpline(CatmullRomSpline crs)
         {
             splines.Remove(crs);
         }
 
+        /// <summary>
+        /// Determines whether or not the given point is inside of a bulb.
+        /// If so, returns the bulb that the point is contained inside.
+        /// </summary>
+        /// <param name="point"></param>
+        /// <returns></returns>
         public DraggablePoint IntersectedBulb(Vector3 point)
         {
             foreach (DraggablePoint bulb in bulbs)
@@ -404,7 +436,7 @@ namespace Telescopes
             scd.splines = splineList;
 
             IFormatter formatter = new BinaryFormatter();
-            Stream stream = new FileStream(filename, FileMode.Create, FileAccess.Write, FileShare.None);
+            Stream stream = new FileStream("savedCanvas/" + filename, FileMode.Create, FileAccess.Write, FileShare.None);
             formatter.Serialize(stream, scd);
             stream.Close();
         }
@@ -424,7 +456,7 @@ namespace Telescopes
         public void ReloadFromFile(string filename)
         {
             IFormatter formatter = new BinaryFormatter();
-            Stream stream = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read);
+            Stream stream = new FileStream("savedCanvas/" + filename, FileMode.Open, FileAccess.Read, FileShare.Read);
             SplineCanvasData data = (SplineCanvasData)formatter.Deserialize(stream);
             stream.Close();
 

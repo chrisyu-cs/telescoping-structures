@@ -74,7 +74,6 @@ namespace Telescopes
                 {
                     twistAngle = TelescopeUtils.AngleBetween(prevBinormal, curvatureBinormal, previousVec);
                 }
-                Debug.Log("bend angle = " + bendAngle);
 
                 if (float.IsNaN(bendAngle)) throw new System.Exception("Bend angle is nan, dot = " + dot);
                 if (float.IsNaN(twistAngle)) throw new System.Exception("Twist angle is nan");
@@ -103,6 +102,11 @@ namespace Telescopes
             targetEndPoint = ReconstructFromAngles();
             ComputeFrenetFrames();
             ComputeBishopFrames();
+
+            for (int i = 1; i < discretizedPoints.Count - 2; i++)
+            {
+                Debug.Log("twist " + i + " = " + TwistAngle(i));
+            }
         }
 
         /// <summary>
@@ -215,6 +219,7 @@ namespace Telescopes
 
         void ReconstructAndAlign()
         {
+            /*
             Vector3 currentEnd = ReconstructFromAngles();
 
             Vector3 currentDir = (currentEnd - startingPoint).normalized;
@@ -232,6 +237,8 @@ namespace Telescopes
 
             Scale(scaleFactor);
             RealignWithParentBulb();
+            */
+
             ReconstructFromAngles();
         }
 
@@ -445,11 +452,12 @@ namespace Telescopes
 
             if (flowMode == FlowMode.CurvatureFlow)
             {
-                //CurvaturePositionFlow(0.001f);
+                CurvaturePositionFlow(0.0001f);
                 
-                CurvatureFlow(1f);
+                /*CurvatureFlow(1f);
                 ComputeFrenetFrames();
                 ComputeBishopFrames();
+                */
             }
 
             else if (flowMode == FlowMode.TorsionFlow)

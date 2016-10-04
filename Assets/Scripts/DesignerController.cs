@@ -47,7 +47,7 @@ namespace Telescopes
         public Toggle sparseToggle;
         public bool UseSparseSolve = false;
 
-        public int numImpulses = 10;
+        public int numImpulses = 6;
         public SplineCanvas splineCanvas;
 
         public MeshFilter currentMesh;

@@ -326,7 +326,7 @@ namespace Telescopes
 
         void Update()
         {
-            if (Input.GetKeyDown("h"))
+            if (Input.GetKey("left shift") && Input.GetKeyDown("h"))
             {
                 Debug.Log("Start collapse");
                 doCollapse = true;
