@@ -116,7 +116,10 @@ namespace Telescopes
             mostRecentPoint = firstPos;
             CatmullRomSpline spline = splineObj.AddComponent<CatmullRomSpline>();
             spline.points = new List<Vector3>();
+            spline.points.Add(firstPos - 0.1f * Vector3.up);
             spline.points.Add(firstPos);
+            spline.points.Add(firstPos + 0.1f * Vector3.up);
+            spline.points.Add(firstPos + 0.2f * Vector3.up);
             spline.containingCanvas = this;
             splines.Add(spline);
             spline.SetMaterial(DesignerController.instance.defaultLineMaterial);
@@ -154,6 +157,22 @@ namespace Telescopes
         public void DeleteBulb(DraggablePoint bulb)
         {
             bulbs.Remove(bulb);
+        }
+
+        public void AddDCurve(DiscreteCurve dc)
+        {
+            dc.containingCanvas = this;
+            dCurves.Add(dc);
+        }
+
+        public void DeleteDCurve(DiscreteCurve dc)
+        {
+            dCurves.Remove(dc);
+        }
+
+        public void AddDBulb(DCurveBulb b)
+        {
+            dBulbs.Add(b);
         }
 
         float RecentDepth()
@@ -246,7 +265,7 @@ namespace Telescopes
                             endOfSpline.parentCurve = dc;
                         }
 
-                        dCurves.Add(dc);
+                        AddDCurve(dc);
                     }
 
                     stage = CanvasStage.DCurve;

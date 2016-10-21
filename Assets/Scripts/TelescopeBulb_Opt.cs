@@ -14,6 +14,16 @@ namespace Telescopes
 {
     public partial class TelescopeBulb
     {
+        void FixContacts()
+        {
+            if (parentSegment)
+            {
+                // Compute correct offset from parent segment
+                Vector3 normal = parentSegment.WorldEndTangent();
+
+            }
+        }
+
         void Rescale(float newRadius)
         {
             float scaleFactor = newRadius / Radius;

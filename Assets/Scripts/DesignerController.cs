@@ -16,7 +16,12 @@ namespace Telescopes
         public InputField curvatureField;
         public InputField twistField;
 
-        public InputField splinePoints;
+        public InputField kMeansPoints;
+        public int NumKMeansPoints {
+            get { return int.Parse(kMeansPoints.text); }
+            set { kMeansPoints.text = value.ToString(); }    
+        }
+
         public InputField impulsePoints;
 
         public Material defaultTelescopeMaterial;
@@ -70,9 +75,11 @@ namespace Telescopes
         {
             currentMode = DesignerMode.Shell;
             modeText.text = "Shell mode";
-            splinePoints.text = "0";
+            kMeansPoints.text = "0";
             impulsePoints.text = numImpulses.ToString();
             splineCanvas = FindObjectOfType<SplineCanvas>();
+
+            NumKMeansPoints = 10;
         }
 
         bool RaycastShells(Vector3 clickPos, out RaycastHit hitInfo)
@@ -250,32 +257,6 @@ namespace Telescopes
             }
         }
 
-        public void SetSplinePoints()
-        {
-            if (!curve || !curve.isActiveAndEnabled) return;
-            int num = int.Parse(splinePoints.text);
-            if (num < 0) return;
-            int currentNum = curve.points.Count;
-
-            // Add more points until we have enough
-            if (num > currentNum)
-            {
-                int numToAdd = num - currentNum;
-                for (int i = 0; i < numToAdd; i++)
-                {
-                    curve.points.Add(new SphereNode(Constants.INITIAL_SPLINE_SIZE, Vector3.zero));
-                }
-            }
-            else if (num < currentNum)
-            {
-                int numToRemove = currentNum - num;
-                for (int i = 0; i < numToRemove; i++)
-                {
-                    curve.points.RemoveAt(curve.points.Count - 1);
-                }
-            }
-        }
-
         public void Deselect()
         {
             if (selected) selected.setMaterial(defaultTelescopeMaterial);
@@ -348,7 +329,7 @@ namespace Telescopes
                     TelescopeParameters childParams = parentParams + segment.DefaultChildDiff;
                     if (childParams.radius < childParams.thickness || childParams.length < childParams.thickness) return;
 
-                    TelescopingShell childShell = segment.addChildShell(selected, parentParams, childParams);
+                    TelescopingShell childShell = segment.addChildShell(selected, parentParams, childParams, 0, true);
                     childShell.extendToRatio(1f, 2f);
                     SelectShell(childShell);
                 }

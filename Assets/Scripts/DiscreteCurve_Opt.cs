@@ -21,7 +21,7 @@ namespace Telescopes
 
             Vector3 a = discretizedPoints[angleIndex].position;
             Vector3 b = discretizedPoints[angleIndex + 1].position;
-            Vector3 c = (angleIndex < 1) ? startingPoint : discretizedPoints[angleIndex - 1].position;
+            Vector3 c = (angleIndex < 1) ? StartingPoint : discretizedPoints[angleIndex - 1].position;
 
             Vector3 b_a = b - a;
             Vector3 c_a = c - a;
@@ -53,7 +53,7 @@ namespace Telescopes
             if (index < 0 || index >= discretizedPoints.Count - 1)
                 throw new System.Exception("Can't take dual length of endpoint " + index);
 
-            Vector3 prev = (index < 1) ? startingPoint : discretizedPoints[index - 1].position;
+            Vector3 prev = (index < 1) ? StartingPoint : discretizedPoints[index - 1].position;
             Vector3 current = discretizedPoints[index].position;
             Vector3 next = discretizedPoints[index + 1].position;
 
@@ -68,7 +68,7 @@ namespace Telescopes
             if (index < 0 || index >= discretizedPoints.Count - 1)
                 throw new System.Exception("Can't take bend angle of endpoint " + index);
 
-            Vector3 prev = (index < 1) ? startingPoint : discretizedPoints[index - 1].position;
+            Vector3 prev = (index < 1) ? StartingPoint : discretizedPoints[index - 1].position;
             Vector3 current = discretizedPoints[index].position;
             Vector3 next = discretizedPoints[index + 1].position;
 
@@ -84,7 +84,7 @@ namespace Telescopes
             if (index < 0 || index >= discretizedPoints.Count - 2)
                 throw new System.Exception("Can't take twist angle of endpoint " + index);
 
-            Vector3 prev = (index < 1) ? startingPoint : discretizedPoints[index - 1].position;
+            Vector3 prev = (index < 1) ? StartingPoint : discretizedPoints[index - 1].position;
             Vector3 current = discretizedPoints[index].position;
             Vector3 next1 = discretizedPoints[index + 1].position;
             Vector3 next2 = discretizedPoints[index + 2].position;
@@ -145,20 +145,21 @@ namespace Telescopes
         {
             if (torsionEdgeIndex < posIndex - 2) return 0;
             if (torsionEdgeIndex > posIndex + 1) return 0;
-            
-            Vector3 edge = discretizedPoints[torsionEdgeIndex + 1].position - discretizedPoints[torsionEdgeIndex].position;
+
+            Vector3 edgeVec = (discretizedPoints[torsionEdgeIndex + 1].position
+                - discretizedPoints[torsionEdgeIndex].position).normalized;
 
             if (torsionEdgeIndex == posIndex - 2)
             {
                 Vector3 n1 = NormalAtVert(torsionEdgeIndex);
-                Vector3 dn = DirectionalNormalWrtPosition(posIndex - 1, posIndex, u);
-                return Vector3.Dot(edge, Vector3.Cross(n1, dn));
+                Vector3 dn2 = DirectionalNormalWrtPosition(posIndex - 1, posIndex, u);
+                return Vector3.Dot(edgeVec, Vector3.Cross(n1, dn2));
             }
             else if (torsionEdgeIndex == posIndex + 1)
             {
                 Vector3 n2 = NormalAtVert(torsionEdgeIndex + 1);
-                Vector3 dn = DirectionalNormalWrtPosition(posIndex + 1, posIndex, u);
-                return Vector3.Dot(edge, Vector3.Cross(dn, n2));
+                Vector3 dn1 = DirectionalNormalWrtPosition(posIndex + 1, posIndex, u);
+                return Vector3.Dot(edgeVec, Vector3.Cross(dn1, n2));
             }
             else
             {
@@ -167,12 +168,8 @@ namespace Telescopes
 
                 Vector3 dn1 = DirectionalNormalWrtPosition(torsionEdgeIndex, posIndex, u);
                 Vector3 dn2 = DirectionalNormalWrtPosition(torsionEdgeIndex + 1, posIndex, u);
-
-                // If differentiating p2 wrt e23, negate the u
-                // Otherwise p2 wrt e12, no negation
-                float term1 = Vector3.Dot((torsionEdgeIndex == posIndex) ? -u : u, Vector3.Cross(n1, n2));
-                float term2 = Vector3.Dot(edge, Vector3.Cross(dn1, n2) + Vector3.Cross(n1, dn2));
-                return term1 + term2;
+                
+                return Vector3.Dot(edgeVec, Vector3.Cross(dn1, n2) + Vector3.Cross(n1, dn2));
             }
         }
 
@@ -186,16 +183,6 @@ namespace Telescopes
             return gradient;
         }
 
-        float TorsionOfEdge(int edgeStart)
-        {
-            Vector3 normal1 = NormalAtVert(edgeStart);
-            Vector3 normal2 = NormalAtVert(edgeStart + 1);
-
-            Vector3 edge = discretizedPoints[edgeStart + 1].position - discretizedPoints[edgeStart].position;
-
-            return Vector3.Dot(edge.normalized, Vector3.Cross(normal1, normal2));
-        }
-
         void CurvaturePositionFlow(float delta)
         {
             foreach (DCurvePoint dcp in discretizedPoints)
@@ -203,7 +190,7 @@ namespace Telescopes
                 dcp.currentGradient = Vector3.zero;
             }
 
-            /*
+            
             for (int i = 1; i < discretizedPoints.Count - 2; i++)
             {
                 // Compute all curvature gradients
@@ -228,9 +215,60 @@ namespace Telescopes
                 if (i < discretizedPoints.Count - 3) gradient += 2f / l_i * (w_plus2 - w_plus1) * (-derivPlus1);
 
                 discretizedPoints[i].currentGradient = gradient;
+            }
+
+            /*
+            AddTwistGradient();
+
+            List<Vector3> gradientAnalytic = new List<Vector3>();
+            for (int i = 0; i < discretizedPoints.Count; i++)
+            {
+                gradientAnalytic.Add(discretizedPoints[i].currentGradient);
+                discretizedPoints[i].currentGradient = Vector3.zero;
             }*/
 
-            
+            AddTwistGradientNumerical();
+
+            /*
+            List<Vector3> gradientNumerical = new List<Vector3>();
+            for (int i = 0; i < discretizedPoints.Count; i++)
+            {
+                gradientNumerical.Add(discretizedPoints[i].currentGradient);
+                //discretizedPoints[i].currentGradient = Vector3.zero;
+            }
+
+            for (int i = 1; i < gradientAnalytic.Count - 2; i++)
+            {
+                float dist = Vector3.Distance(gradientAnalytic[i], gradientNumerical[i]);
+                Debug.Log("Distance " + i + " = " + dist + " (" + gradientAnalytic[i] + ", " + gradientNumerical[i] + ")");
+            }*/
+
+            float gradientMag = 0;
+
+            foreach (DCurvePoint dcp in discretizedPoints)
+            {
+                dcp.position -= (delta * dcp.currentGradient);
+                gradientMag += dcp.currentGradient.sqrMagnitude;
+            }
+
+            gradientMag = Mathf.Sqrt(gradientMag);
+            Debug.Log("gradient magnitude = " + gradientMag + ", energy = " + TwistEnergy());
+
+            curvePoints = new List<Vector3>();
+            curvePoints.Add(StartingPoint);
+
+            foreach (DCurvePoint dcp in discretizedPoints)
+            {
+                curvePoints.Add(dcp.position);
+            }
+
+            lineRender = GetComponent<LineRenderer>();
+            lineRender.SetVertexCount(curvePoints.Count);
+            lineRender.SetPositions(curvePoints.ToArray());
+        }
+
+        void AddTwistGradient()
+        {
             for (int i = 1; i < discretizedPoints.Count - 2; i++)
             {
                 // Compute all torsion gradients 
@@ -243,7 +281,7 @@ namespace Telescopes
                 float t_plus2 = (i < discretizedPoints.Count - 4) ? TwistAngle(i + 2) : 0;
 
                 float l_i = DualLength(i);
-                
+
                 Vector3 derivMinus2 = (i > 2) ? TorsionWrtPosition(i - 2, i) : Vector3.zero;
                 Vector3 derivMinus1 = (i > 1) ? TorsionWrtPosition(i - 1, i) : Vector3.zero;
                 Vector3 derivI = TorsionWrtPosition(i, i);
@@ -257,7 +295,7 @@ namespace Telescopes
                 Vector3 E4 = (i < discretizedPoints.Count - 2) ?
                     (t_plus1 - t_i) * (derivPlus1 - derivI) : Vector3.zero;
                 Vector3 E5 = (i < discretizedPoints.Count - 3) ?
-                    (t_plus2 - t_plus1) * (- derivPlus1) : Vector3.zero;
+                    (t_plus2 - t_plus1) * (-derivPlus1) : Vector3.zero;
 
                 gradient = 2f * (E1 + E2 + E3 + E4 + E5) / l_i;
 
@@ -265,43 +303,59 @@ namespace Telescopes
 
                 discretizedPoints[i].currentGradient += gradient;
             }
+        }
 
-            string s = "";
-            float sumDiff = 0;
+        void AddTwistGradientNumerical()
+        {
+            float h = 0.0001f;
 
-            for (int i = 1; i < discretizedPoints.Count - 3; i++)
+            for (int i = 1; i < discretizedPoints.Count - 2; i++)
             {
-                float diff = TwistAngle(i + 1) - TwistAngle(i);
-                s += (i == discretizedPoints.Count - 4) ? diff.ToString() : diff + ", ";
-                sumDiff += Mathf.Abs(diff);
+                Vector3 initPos = discretizedPoints[i].position;
+
+                // Diff wrt x coordinate
+                discretizedPoints[i].position = new Vector3(initPos.x + h, initPos.y, initPos.z);
+                float xEnergyPlus = TwistEnergy();
+                discretizedPoints[i].position = new Vector3(initPos.x - h, initPos.y, initPos.z);
+                float xEnergyMinus = TwistEnergy();
+                float dxdP = (xEnergyPlus - xEnergyMinus) / (2 * h);
+
+                // Diff wrt y coordinate
+                discretizedPoints[i].position = new Vector3(initPos.x, initPos.y + h, initPos.z);
+                float yEnergyPlus = TwistEnergy();
+                discretizedPoints[i].position = new Vector3(initPos.x, initPos.y - h, initPos.z);
+                float yEnergyMinus = TwistEnergy();
+                float dydP = (yEnergyPlus - yEnergyMinus) / (2 * h);
+
+                // Diff wrt z coordinate
+                discretizedPoints[i].position = new Vector3(initPos.x, initPos.y, initPos.z + h);
+                float zEnergyPlus = TwistEnergy();
+                discretizedPoints[i].position = new Vector3(initPos.x, initPos.y, initPos.z - h);
+                float zEnergyMinus = TwistEnergy();
+                float dzdP = (zEnergyPlus - zEnergyMinus) / (2 * h);
+
+                discretizedPoints[i].position = initPos;
+
+                Vector3 gradient = new Vector3(dxdP, dydP, dzdP);
+                discretizedPoints[i].currentGradient += gradient;
+            }
+        }
+
+        float TwistEnergy()
+        {
+            float[] twists = new float[discretizedPoints.Count - 2];
+            for (int i = 1; i < discretizedPoints.Count - 2; i++)
+            {
+                twists[i] = TwistAngle(i);
+            }
+            float sumDiffs = 0;
+            for (int i = 2; i < discretizedPoints.Count - 2; i++)
+            {
+                float diff = (twists[i] - twists[i - 1]);
+                sumDiffs += diff * diff / DualLength(i);
             }
 
-            Debug.Log(s);
-
-            float gradientMag = 0;
-
-            foreach (DCurvePoint dcp in discretizedPoints)
-            {
-                dcp.position -= (delta * dcp.currentGradient);
-                gradientMag += dcp.currentGradient.sqrMagnitude;
-            }
-
-            gradientMag = Mathf.Sqrt(gradientMag);
-            Debug.Log("gradient magnitude = " + gradientMag + ", sum diffs = " + sumDiff);
-
-            curvePoints = new List<Vector3>();
-            curvePoints.Add(startingPoint);
-
-            foreach (DCurvePoint dcp in discretizedPoints)
-            {
-                curvePoints.Add(dcp.position);
-            }
-
-            lineRender = GetComponent<LineRenderer>();
-            lineRender.SetVertexCount(curvePoints.Count);
-            lineRender.SetPositions(curvePoints.ToArray());
-
-            ComputeFrenetFrames();
+            return sumDiffs;
         }
 
         void CurvatureFlow(float delta)
@@ -372,18 +426,187 @@ namespace Telescopes
             ReconstructAndAlign();
         }
 
+        void SetLeftRight(List<KMeansCenter> centers, List<int> right)
+        {
+            int currCenter = 0;
+            int currPt = 0;
+
+            right.Clear();
+
+            // Traverse lists of points and centers in parallel.
+            while (currPt < discretizedPoints.Count)
+            {
+                float arcPos = segmentLength * currPt;
+                
+                // If the next center is still past our current position
+                if (currCenter == centers.Count || arcPos <= centers[currCenter].arcPosition)
+                {
+                    // Then the next center is still to the right.
+                    right.Add(currCenter);
+                    currPt++;
+                }
+                // Otherwise we've passed this center.
+                else
+                {
+                    currCenter++;
+                }
+            }
+        }
+        
+        class KMeansCenter
+        {
+            public float arcPosition;
+            public float curvature;
+            public List<int> assignedPoints;
+
+            public KMeansCenter(float arc, float c)
+            {
+                arcPosition = arc;
+                curvature = c;
+                assignedPoints = new List<int>();
+            }
+
+            public void SetArcPos(float a)
+            {
+                arcPosition = a;
+            }
+
+            public void SetCurvature(float c)
+            {
+                curvature = c;
+            }
+        }
+
+        public void CurvatureKMeans(int numClusters)
+        {
+            // Do one step of heat flow to discourage tiny clusters
+            CurvatureFlow(1f);
+
+            float lengthStep = 1f / numClusters * ArcLength;
+            List<KMeansCenter> centers = new List<KMeansCenter>();
+            for (int i = 0; i < numClusters; i++)
+            {
+                float intervalMiddle = (i + 0.5f) * lengthStep;
+                int nearbyPoint = (int)((intervalMiddle / ArcLength) * discretizedPoints.Count);
+                centers.Add(new KMeansCenter(intervalMiddle, discretizedPoints[nearbyPoint].bendingAngle));
+            }
+
+            List<int> rightSide = new List<int>();
+
+            bool done = false;
+            int numIters = 0;
+
+            while (!done && numIters < 1000)
+            {
+                numIters++;
+                bool noChange = true;
+
+                // Figure out which centers are on either side of each point.
+                SetLeftRight(centers, rightSide);
+
+                // Clear assigned points in preparation for reassignment.
+                for (int i = 0; i < centers.Count; i++)
+                {
+                    centers[i].assignedPoints.Clear();
+                }
+
+                // Assign points to the nearest centers in terms of curvature value.
+                for (int i = 0; i < discretizedPoints.Count; i++)
+                {
+                    float curvature = discretizedPoints[i].bendingAngle;
+                    
+                    // If this point is already to the left of the first center
+                    if (rightSide[i] == 0)
+                    {
+                        // Then assign it to the first center.
+                        centers[0].assignedPoints.Add(i);
+                    } 
+                    // If this point is already to the right of the last center
+                    else if (rightSide[i] >= centers.Count)
+                    {
+                        // Then assign it to the last center.
+                        centers[centers.Count - 1].assignedPoints.Add(i);
+                    }
+                    // Otherwise compare the two centers on either side.
+                    else
+                    {
+                        int left = rightSide[i] - 1;
+                        int right = rightSide[i];
+
+                        float leftDiff = Mathf.Abs(centers[left].curvature - curvature);
+                        float rightDiff = Mathf.Abs(centers[right].curvature - curvature);
+
+                        if (leftDiff < rightDiff)
+                        {
+                            centers[left].assignedPoints.Add(i);
+                        }
+                        else
+                        {
+                            centers[right].assignedPoints.Add(i);
+                        }
+                    }
+                }
+
+                // Update centers based on current clusters
+                foreach (KMeansCenter center in centers)
+                {
+                    float averageArc = 0;
+                    float averageCurv = 0;
+                    foreach (int pt in center.assignedPoints)
+                    {
+                        float arcPos = segmentLength * pt;
+                        averageArc += arcPos;
+                        averageCurv += discretizedPoints[pt].bendingAngle;
+                    }
+
+                    averageArc /= center.assignedPoints.Count;
+                    averageCurv /= center.assignedPoints.Count;
+
+                    if (!(averageArc == center.arcPosition
+                        && averageCurv == center.curvature))
+                    {
+                        noChange = false;
+                    }
+
+                    center.arcPosition = averageArc;
+                    center.curvature = averageCurv;
+                }
+
+                // If there was no change, then we are done
+                done = noChange;
+            }
+            Debug.Log("Finished in " + numIters + " iterations (curve of arc length " + ArcLength + ")");
+
+            List<float> segmentedCurvatures = new List<float>();
+
+            // Split up the curve -- determine curvature values for each piece
+            foreach (KMeansCenter center in centers)
+            {
+                foreach (int i in center.assignedPoints)
+                {
+                    segmentedCurvatures.Add(center.curvature);
+                }
+            }
+
+            SplitCurveByCurvature(segmentedCurvatures);
+        }
+
         public void SegmentCurvature()
         {
             List<float> curvatures = SolveCurvature(Constants.CURVATURE_SOLVE_THRESHOLD);
-            
+            SplitCurveByCurvature(curvatures);
+        }
+
+        void SplitCurveByCurvature(List<float> curvatures)
+        {
             int numSegments = 0;
-            // placeholder
+
+            // Replace all curvature values in this curve by the targets
             float currentCurvature = 0;
             for (int i = 0; i < discretizedPoints.Count; i++)
             {
                 if (i == 0 || Mathf.Abs(curvatures[i] - currentCurvature) > Constants.CURVE_SEGMENT_THRESHOLD)
                 {
-                    Debug.Log("difference = " + Mathf.Abs(currentCurvature - curvatures[i]));
                     currentCurvature = curvatures[i];
                     numSegments++;
                 }
@@ -396,6 +619,7 @@ namespace Telescopes
 
             Debug.Log(numSegments + " segments (out of " + discretizedPoints.Count + " possible)");
 
+            // Compute new positions from replaced curvatures
             ReconstructFromAngles();
             ComputeFrenetFrames();
             ComputeBishopFrames();
@@ -408,6 +632,8 @@ namespace Telescopes
             GameObject subcurves = new GameObject();
             subcurves.name = "subcurves";
             subcurves.transform.parent = this.transform.parent;
+
+            DCurveBulb prevBulb = null;
 
             // Create curves for each section of constant curvature
             for (int i = 0; i < discretizedPoints.Count; i++)
@@ -425,6 +651,39 @@ namespace Telescopes
                         DiscreteCurve newCurve = newCurveObj.AddComponent<DiscreteCurve>();
                         newCurve.InitFromPoints(current, segmentLength);
 
+                        if (i > 0 && i < discretizedPoints.Count - 1)
+                        {
+                            if (prevBulb)
+                            {
+                                newCurve.parentBulb = prevBulb;
+                                prevBulb.childCurves.Add(newCurve);
+
+                                prevBulb.MoveToParentEnd();
+                            }
+
+                            GameObject dcBulb = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                            DCurveBulb dcb = dcBulb.AddComponent<DCurveBulb>();
+                            dcb.InitFromValues(discretizedPoints[i].position, 0.2f);
+                            dcb.transform.parent = containingCanvas.transform;
+
+                            newCurve.childBulb = dcb;
+                            dcb.parentCurve = newCurve;
+
+                            prevBulb = dcb;
+
+                            containingCanvas.AddDBulb(dcb);
+                        }
+
+                        else if (i == discretizedPoints.Count - 1)
+                        {
+                            if (prevBulb)
+                            {
+                                newCurve.parentBulb = prevBulb;
+                                prevBulb.childCurves.Add(newCurve);
+                                prevBulb.MoveToParentEnd();
+                            }
+                        }
+
                         LineRenderer lr = newCurve.GetComponent<LineRenderer>();
                         lr.SetWidth(0.1f, 0.1f);
                         lr.material = lineRender.material;
@@ -432,13 +691,21 @@ namespace Telescopes
                         Color c = Color.HSVToRGB(currentColor, 1, 1);
                         lr.SetColors(c, c);
                         currentColor = Mathf.Repeat(currentColor + 0.3f, 1);
+
+                        containingCanvas.AddDCurve(newCurve);
                     }
                     current = new List<Vector3>();
+                    if (i == 0)
+                    {
+                        current.Add(StartingPoint);
+                    }
                 }
                 previous = curvatures[i];
                 // Add the current point again as the first one of the next curve
                 current.Add(discretizedPoints[i].position);
             }
+
+            containingCanvas.DeleteDCurve(this);
 
             gameObject.SetActive(false);
         }

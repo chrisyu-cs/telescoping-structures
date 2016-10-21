@@ -36,3 +36,4 @@ bulbOpt.log
 *.stl
 *.bin
 *.canvas
+*.cmb.gz

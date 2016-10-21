@@ -178,21 +178,47 @@ namespace Telescopes
             return rotation;
         }
 
-        public static Vector3 childBasePosition(TelescopeParameters parent, TelescopeParameters child)
+        public static Vector3 childBasePosition(TelescopeParameters parent,
+            TelescopeParameters child, bool useTorsion = true)
         {
-            Vector3 translationToBase = TranslateAlongHelix(parent.curvature, parent.torsion, parent.length);
-            Quaternion rotationToBase = RotateAlongHelix(parent.curvature, parent.torsion, parent.length);
-            Vector3 translationBackwards = TranslateAlongHelix(child.curvature, child.torsion, -child.length);
+            float parentTorsion = (useTorsion) ? parent.torsion : 0;
+            float childTorsion = (useTorsion) ? child.torsion : 0;
+            Vector3 translationToBase = TranslateAlongHelix(parent.curvature, parentTorsion, parent.length);
+            Quaternion rotationToBase = RotateAlongHelix(parent.curvature, parentTorsion, parent.length);
+            Vector3 translationBackwards = TranslateAlongHelix(child.curvature, childTorsion, -child.length);
 
             translationToBase = translationToBase + (rotationToBase * translationBackwards);
             return translationToBase;
         }
 
-        public static Quaternion childBaseRotation(TelescopeParameters parent, TelescopeParameters child)
+        public static Quaternion childBaseRotation(TelescopeParameters parent,
+            TelescopeParameters child, bool useTorsion = true)
         {
-            Quaternion rotationToBase = RotateAlongHelix(parent.curvature, parent.torsion, parent.length);
-            Quaternion rotationBack = RotateAlongHelix(child.curvature, child.torsion, -child.length);
-            return rotationBack * rotationToBase;
+            float parentTorsion = (useTorsion) ? parent.torsion : 0;
+            float childTorsion = (useTorsion) ? child.torsion : 0;
+            Quaternion rotationToBase = RotateAlongHelix(parent.curvature, parentTorsion, parent.length);
+            Quaternion rotationBack = RotateAlongHelix(child.curvature, childTorsion, -child.length);
+            return rotationToBase * rotationBack;
+        }
+
+        public static Vector3 FarthestPointOnCircle(Vector3 circCenter, Vector3 circNormal, float radius, Vector3 point)
+        {
+            Vector3 ptToCenter = circCenter - point;
+            Vector3 perpToNormal = ptToCenter - circNormal * Vector3.Dot(ptToCenter, circNormal);
+            float norm = perpToNormal.magnitude;
+            if (norm <= 0)
+            {
+                if (circNormal == Vector3.up) return circCenter + radius * Vector3.right;
+                else
+                {
+                    perpToNormal = Vector3.up - circNormal * Vector3.Dot(circNormal, Vector3.up);
+                    return circCenter + radius * perpToNormal.normalized;
+                }
+            }
+            perpToNormal /= norm;
+
+            Vector3 circPoint = circCenter + radius * perpToNormal;
+            return circPoint;
         }
 
         public static void growParentToChild(TelescopeParameters parent, TelescopeParameters child, bool shrinkFit=false)
@@ -201,6 +227,9 @@ namespace Telescopes
             // in the parent's coordinate frame.
             Vector3 childBasePos = childBasePosition(parent, child);
             Quaternion childBaseRot = childBaseRotation(parent, child);
+
+            Debug.Log("Deviation due to torsion (parent " + parent.torsion +
+                ", child " + child.torsion + ")" + " = " + childBasePos);
 
             Vector3 childOutward = childBaseRot * Vector3.down;
 
@@ -219,8 +248,8 @@ namespace Telescopes
                 if (!shrinkFit) finalRadius = Mathf.Max(finalRadius, parent.radius);
             }
 
-            // Otherwise we need to compute the distance from the center of rotation to the
-            // corners, and take their max distance from the center line.
+            // Otherwise we need to compute the distance from the center line to the
+            // corners, and take their max distance.
             else
             {
                 // Fact: The centers of rotation for the parent and the extended child both lie
@@ -238,7 +267,7 @@ namespace Telescopes
                 if (!shrinkFit) finalRadius = Mathf.Max(finalRadius, parent.radius);
             }
             float widthChange = finalRadius - parent.radius;
-
+            
             parent.radius = finalRadius;
             // parent.thickness += widthChange;
         }

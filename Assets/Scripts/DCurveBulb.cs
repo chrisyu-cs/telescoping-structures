@@ -7,18 +7,31 @@ namespace Telescopes
     {
         public float radius = 0.5f;
 
-        public IParameterizedCurve parentCurve;
+        private IParameterizedCurve pc;
+        public IParameterizedCurve parentCurve {
+            get { return pc; }
+            set
+            {
+                pc = value;
+                previousParentTangent = parentCurve.EndTangent;
+            }
+        }
+
         private Vector3 previousParentTangent;
         public List<IParameterizedCurve> childCurves;
 
+        public void InitFromValues(Vector3 position, float radius)
+        {
+            this.radius = radius;
+            transform.position = position;
+            transform.localScale = new Vector3(radius, radius, radius) * 2;
+            childCurves = new List<IParameterizedCurve>();
+        }
+
         public void InitFromPoint(DraggablePoint p)
         {
-            radius = p.radius;
-            transform.position = p.transform.position;
-            transform.localScale = new Vector3(radius, radius, radius) * 2;
             transform.parent = p.transform.parent;
-
-            childCurves = new List<IParameterizedCurve>();
+            InitFromValues(p.transform.position, p.radius);
         }
 
         public DCurveBulb Duplicate()
@@ -34,6 +47,20 @@ namespace Telescopes
             newBulb.childCurves = new List<IParameterizedCurve>();
 
             return newBulb;
+        }
+
+        public void MoveToParentEnd()
+        {
+            Vector3 parentEnd = parentCurve.EndPosition;
+            Vector3 tangent = parentCurve.EndTangent;
+
+            Vector3 newPos = parentEnd + radius * tangent;
+            transform.position = newPos;
+
+            foreach (IParameterizedCurve dc in childCurves)
+            {
+                dc.RotateAndOffset(Quaternion.identity, newPos, radius);
+            }
         }
 
         // Update is called once per frame

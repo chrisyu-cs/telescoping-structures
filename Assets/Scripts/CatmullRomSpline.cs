@@ -496,11 +496,6 @@ namespace Telescopes
                 }
             }
 
-            if (Input.GetKey("left shift") && Input.GetKeyDown("p") && !parent)
-            {
-                ConvertToDCurve();
-            }
-
             if (points.Count >= 4)
             {
                 if (StartBulb)

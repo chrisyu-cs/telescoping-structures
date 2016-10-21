@@ -68,7 +68,7 @@ namespace Telescopes
             return facets;
         }
 
-        delegate string StringToVector(Vector3 v);
+        delegate string StringOfVector(Vector3 v);
 
         static void CheckPositiveOctant(Vector3 v)
         {
@@ -113,13 +113,13 @@ namespace Telescopes
                 }
                 */
 
-                StringToVector stv = (v => v.x + " " + v.y + " " + v.z);
+                StringOfVector sov = (v => v.x + " " + v.y + " " + v.z);
 
-                lines.Add("  facet normal " + stv(crossNormal));
+                lines.Add("  facet normal " + sov(-crossNormal));
                 lines.Add("    outer loop");
-                lines.Add("      vertex " + stv(p1));
-                lines.Add("      vertex " + stv(p2));
-                lines.Add("      vertex " + stv(p3));
+                lines.Add("      vertex " + sov(p1));
+                lines.Add("      vertex " + sov(p2));
+                lines.Add("      vertex " + sov(p3));
                 lines.Add("    endloop");
                 lines.Add("  endfacet");
             }

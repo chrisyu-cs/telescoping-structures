@@ -35,8 +35,13 @@ namespace Telescopes
         [Tooltip("The angle that the curvature tends toward. 0 degrees = up.")]
         public float curvatureRotation = 0f;
 
-        [Tooltip("How thick the walls of the geometry are to be.")]
-        public float wallThickness = Constants.DEFAULT_WALL_THICKNESS;
+        public float wallThickness
+        {
+            get
+            {
+                return Constants.DEFAULT_WALL_THICKNESS;
+            }
+        }
 
         public List<TelescopeParameters> parameters;
         public List<TelescopeParameters> concreteParameters;
@@ -77,7 +82,8 @@ namespace Telescopes
         }
 
         public TelescopingShell addChildShell(TelescopingShell parent,
-            TelescopeParameters parentParams, TelescopeParameters childParams)
+            TelescopeParameters parentParams, TelescopeParameters childParams,
+            float nextTwist, bool doOverhang)
         {
             int i = shells.Count;
             // Make the new shell, and set the previous shell as its parent
@@ -87,7 +93,7 @@ namespace Telescopes
 
             // Make the geometry, etc.
             TelescopingShell newShell = shellObj.AddComponent<TelescopingShell>();
-            newShell.GenerateGeometry(childParams);
+            newShell.GenerateGeometry(childParams, nextTwist, overhang: doOverhang);
             newShell.setMaterial(material);
 
             // Set the shell's rest transformation relative to its parent.
@@ -141,6 +147,9 @@ namespace Telescopes
 
         public void MakeAllShells(List<TelescopeParameters> paramList, bool reversed = false)
         {
+            Debug.Log("Wall = " + Constants.DEFAULT_WALL_THICKNESS + ", slope = " + Constants.TAPER_SLOPE +
+                ", gap = " + Constants.SHELL_GAP + ", indent = " + Constants.INDENT_RATIO);
+
             DeleteTelescope();
             
             // Create an object for the first shell
@@ -153,8 +162,13 @@ namespace Telescopes
 
             // Make the shell geometry
             TelescopingShell shell = rootShellObj.AddComponent<TelescopingShell>();
-            shell.GenerateGeometry(paramList[0]);
+            // Get the twist impulse of the shell after, since we need to cut the
+            // grooves in this shell to enable it
+            float twist1 = (paramList.Count > 1) ? paramList[1].twistFromParent : 0;
+            shell.GenerateGeometry(paramList[0], twist1);
             shell.setMaterial(material);
+
+            Debug.Log("shell thickness " + shell.thickness + ", param thickness " + paramList[0].thickness);
 
             // Shells don't know anything about their position/rotation,
             // so we set that here.
@@ -190,8 +204,12 @@ namespace Telescopes
 
                 currentParams.radius -= accumulatedTaper;
 
+                // Get the twist impulse for the next shell, so that we can cut the grooves.
+                float nextTwist = (i < paramList.Count - 1) ? paramList[i + 1].twistFromParent : 0;
+
                 // Add it.
-                prevShell = addChildShell(prevShell, previousParams, currentParams);
+                bool doOverhang = (i < paramList.Count - 1);
+                prevShell = addChildShell(prevShell, previousParams, currentParams, nextTwist, doOverhang);
                 accumulatedTaper += prevShell.getTaperLoss();
             }
 
@@ -306,6 +324,9 @@ namespace Telescopes
         {
             float tRemaining = t;
             float tStep = 1f / (shells.Count - 1);
+
+            shells[0].extensionRatio = Mathf.Clamp01(t);
+
             for (int i = 1; i < shells.Count; i++)
             {
                 TelescopingShell ts = shells[i];
@@ -335,6 +356,12 @@ namespace Telescopes
                 shells[i].SetTransform();
             }
         }
+
+        /*
+        public Vector3 WorldEndPosition()
+        {
+            TelescopingShell lastShell = shells[shells.Count - 1];
+        }*/
 
         public Vector3 WorldEndTangent()
         {
@@ -407,6 +434,36 @@ namespace Telescopes
             SetShellExtensions(currentExtension);
         }
 
+        public void PrependShell()
+        {
+            Vector3 loc = shells[0].getLocalLocationAlongPath(-1);
+            Quaternion rot = shells[0].getLocalRotationAlongPath(-1);
+
+            TelescopeParameters p = new TelescopeParameters(shells[0].getParameters());
+            p.radius += p.thickness;
+
+            // Create the new shell object
+            GameObject newShell = new GameObject();
+            TelescopingShell shell = newShell.AddComponent<TelescopingShell>();
+            shell.GenerateGeometry(p, 0);
+            shell.setMaterial(material);
+
+            Vector3 shellLoc = shells[0].transform.position;
+            Quaternion shellRot = shells[0].transform.rotation;
+
+            // Move the new shell to be in position to receive the old one
+            shell.transform.parent = shells[0].transform.parent;
+            shell.transform.position = shellLoc + shellRot * loc;
+            shell.transform.rotation = shellRot * rot;
+
+            // Reparent the old starting shell so it becomes the child of the new one
+            shells[0].baseTranslation = Vector3.zero;
+            shells[0].baseRotation = Quaternion.identity;
+            shells[0].transform.parent = shell.transform;
+            shell.extensionRatio = shells[0].extensionRatio;
+            shells.Insert(0, shell);
+        }
+
         // Update is called once per frame
         void Update()
         {
@@ -450,12 +507,10 @@ namespace Telescopes
                 shells[i].SetTransform();
             }
 
-            // Live-update the orientation for better testing
-            /*
-            initialDirection.Normalize();
-            Quaternion rotation = Quaternion.FromToRotation(Vector3.forward, initialDirection);
-            Quaternion roll = Quaternion.AngleAxis(curvatureRotation, initialDirection);
-            shells[0].transform.rotation = roll * rotation;*/
+            if (Input.GetKeyDown("/"))
+            {
+                PrependShell();
+            }
         }
     }
 

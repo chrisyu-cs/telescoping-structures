@@ -11,9 +11,20 @@ namespace Telescopes
     [RequireComponent(typeof(LineRenderer))]
     public partial class DiscreteCurve : MonoBehaviour, IParameterizedCurve
     {
-        private Vector3 startingPoint;
+        public Vector3 StartingPoint;
+
         private Vector3 startingTangent;
         private Vector3 startingBinormal;
+
+        public Vector3 LastPoint
+        {
+            get
+            {
+                return discretizedPoints[discretizedPoints.Count - 1].position;
+            }
+        }
+
+        public DiscreteCurve ParentCurve;
 
         private Vector3 targetEndPoint;
 
@@ -28,6 +39,8 @@ namespace Telescopes
         public DCurveBulb parentBulb;
         public DCurveBulb childBulb;
 
+        public SplineCanvas containingCanvas;
+
         // Use this for initialization
         void Start()
         {
@@ -39,7 +52,7 @@ namespace Telescopes
         {
             segmentLength = segLength;
 
-            startingPoint = points[0];
+            StartingPoint = points[0];
             startingTangent = points[1] - points[0];
             startingTangent.Normalize();
 
@@ -102,11 +115,6 @@ namespace Telescopes
             targetEndPoint = ReconstructFromAngles();
             ComputeFrenetFrames();
             ComputeBishopFrames();
-
-            for (int i = 1; i < discretizedPoints.Count - 2; i++)
-            {
-                Debug.Log("twist " + i + " = " + TwistAngle(i));
-            }
         }
 
         /// <summary>
@@ -131,9 +139,9 @@ namespace Telescopes
                 Vector3 parentCenter = parentBulb.transform.position;
                 Vector3 offset = parentBulb.radius * startingTangent;
 
-                Vector3 translation = (parentCenter + offset) - startingPoint;
+                Vector3 translation = (parentCenter + offset) - StartingPoint;
 
-                startingPoint += translation;
+                StartingPoint += translation;
                 targetEndPoint += translation;
             }
         }
@@ -148,9 +156,9 @@ namespace Telescopes
         public void RotateAndOffset(Quaternion rotation, Vector3 bulbCenter, float radius)
         {
             Rotate(rotation);
-            startingPoint = bulbCenter + (radius * startingTangent);
+            StartingPoint = bulbCenter + (radius * startingTangent);
 
-            ReconstructFromAngles();
+            targetEndPoint = ReconstructFromAngles();
             ComputeFrenetFrames();
             ComputeBishopFrames();
         }
@@ -183,7 +191,7 @@ namespace Telescopes
         {
             curvePoints = new List<Vector3>();
 
-            Vector3 currentPoint = startingPoint;
+            Vector3 currentPoint = StartingPoint;
             curvePoints.Add(currentPoint);
             Vector3 currentDir = startingTangent;
 
@@ -219,11 +227,11 @@ namespace Telescopes
 
         void ReconstructAndAlign()
         {
-            /*
             Vector3 currentEnd = ReconstructFromAngles();
 
-            Vector3 currentDir = (currentEnd - startingPoint).normalized;
-            Vector3 targetDir = targetEndPoint - startingPoint;
+            /*
+            Vector3 currentDir = (currentEnd - StartingPoint).normalized;
+            Vector3 targetDir = targetEndPoint - StartingPoint;
             float targetLength = targetDir.magnitude;
             targetDir /= targetLength;
 
@@ -232,14 +240,13 @@ namespace Telescopes
             Rotate(toTarget);
 
             Vector3 rotatedEnd = ReconstructFromAngles();
-            float currentDist = Vector3.Distance(rotatedEnd, startingPoint);
+            float currentDist = Vector3.Distance(rotatedEnd, StartingPoint);
             float scaleFactor = targetLength / currentDist;
 
             Scale(scaleFactor);
             RealignWithParentBulb();
-            */
-
-            ReconstructFromAngles();
+            
+            ReconstructFromAngles();*/
         }
 
         void SetupLineRenderer()
@@ -260,7 +267,7 @@ namespace Telescopes
                 DCurvePoint dcp = discretizedPoints[i];
                 if (i == 0)
                 {
-                    Vector3 prevPos = startingPoint;
+                    Vector3 prevPos = StartingPoint;
                     dcp.ComputeFrenet(prevPos, discretizedPoints[i + 1]);
                 }
                 else if (i == discretizedPoints.Count - 1)
@@ -415,7 +422,8 @@ namespace Telescopes
         {
             if (Input.GetKey("left shift") && Input.GetKeyDown("j"))
             {
-                SegmentCurvature();
+                Debug.Log("Segmenting curvature into " + DesignerController.instance.NumKMeansPoints + " segments");
+                CurvatureKMeans(DesignerController.instance.NumKMeansPoints);
             }
 
             if (Input.GetKey("left shift") && Input.GetKeyDown("l"))
@@ -452,12 +460,11 @@ namespace Telescopes
 
             if (flowMode == FlowMode.CurvatureFlow)
             {
-                CurvaturePositionFlow(0.0001f);
+                //CurvaturePositionFlow(0.0002f);
                 
-                /*CurvatureFlow(1f);
+                CurvatureFlow(1f);
                 ComputeFrenetFrames();
                 ComputeBishopFrames();
-                */
             }
 
             else if (flowMode == FlowMode.TorsionFlow)
@@ -634,7 +641,7 @@ namespace Telescopes
 
             impulseCurve.InitFromData(impulses, arcSteps,
                 averageCurvature, constTorsion,
-                startFrame, startingPoint);
+                startFrame, StartingPoint);
 
             impulseCurve.SetMaterial(lineRender.material);
 
