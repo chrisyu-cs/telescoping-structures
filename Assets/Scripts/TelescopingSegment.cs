@@ -49,6 +49,52 @@ namespace Telescopes
         public List<TelescopingShell> shells;
         private GameObject telescopeRootShell;
 
+        public TelescopingShell FirstShell
+        {
+            get
+            {
+                return shells[0];
+            }
+        }
+
+        public TelescopingShell LastShell
+        {
+            get
+            {
+                return shells[shells.Count - 1];
+            }
+        }
+
+        public List<Vector3> FirstVertRing
+        {
+            get
+            {
+                TelescopingShell baseShell = FirstShell; 
+                List<Vector3> firstRing = (Reversed) ? baseShell.TopRing : baseShell.BottomRing;
+                List<Vector3> worldSpace = new List<Vector3>();
+                foreach (Vector3 v in firstRing)
+                {
+                    worldSpace.Add(baseShell.transform.rotation * v + baseShell.transform.position);
+                }
+                return worldSpace;
+            }
+        }
+
+        public List<Vector3> LastVertRing
+        {
+            get
+            {
+                TelescopingShell endShell = LastShell;
+                List<Vector3> lastRing = (!Reversed) ? endShell.TopRing : endShell.BottomRing;
+                List<Vector3> worldSpace = new List<Vector3>();
+                foreach (Vector3 v in lastRing)
+                {
+                    worldSpace.Add(endShell.transform.rotation * v + endShell.transform.position);
+                }
+                return worldSpace;
+            }
+        }
+
         public TelescopeElement parent;
         public int parentElementNumber;
         public Vector3 offsetFromParent;
@@ -65,7 +111,7 @@ namespace Telescopes
             }
         }
 
-        public void SetParent(TelescopeBulb bulb)
+        public void SetParent(TelescopeJuncture bulb)
         {
             parent = bulb;
             parentElementNumber = 0;
@@ -509,7 +555,22 @@ namespace Telescopes
 
             if (Input.GetKeyDown("/"))
             {
-                PrependShell();
+                List<Vector3> firstRing = FirstVertRing;
+                List<Vector3> lastRing = LastVertRing;
+
+                foreach (Vector3 v in firstRing)
+                {
+                    GameObject g = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                    g.transform.localScale = new Vector3(0.1f, 0.1f, 0.1f);
+                    g.transform.position = v;
+                }
+                
+                foreach (Vector3 v in lastRing)
+                {
+                    GameObject g = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                    g.transform.localScale = new Vector3(0.1f, 0.1f, 0.1f);
+                    g.transform.position = v;
+                }
             }
         }
     }

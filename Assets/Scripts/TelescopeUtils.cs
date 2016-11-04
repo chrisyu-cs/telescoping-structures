@@ -221,6 +221,64 @@ namespace Telescopes
             return circPoint;
         }
 
+        public static void growParentToChildHelix(TelescopeParameters parent, TelescopeParameters child, bool shrinkFit = false)
+        {
+            float maxRequiredRadius = 0;
+
+            // Find the largest radius necessary at every point along the parent arc
+            for (int i = 0; i <= Constants.CUTS_PER_CYLINDER; i++)
+            {
+                float arcPos = parent.length / Constants.CUTS_PER_CYLINDER * i;
+                Vector3 parentPos = TranslateAlongHelix(parent.curvature, parent.torsion, arcPos);
+                Vector3 parentT = FrameAlongHelix(parent.curvature, parent.torsion, arcPos).T;
+
+                float minDot = 1;
+                Vector3 closestPoint = parentPos;
+                float closestArc = 0;
+
+                // Find the point on the second arc nearest to the normal of the first one.
+                for (int j = 0; j <= Constants.CUTS_PER_CYLINDER; j++)
+                {
+                    float childArc = child.length / Constants.CUTS_PER_CYLINDER * j;
+                    Vector3 childPos = TranslateAlongHelix(child.curvature, child.torsion, childArc);
+                    Vector3 childOffset = childPos - parentPos;
+
+                    // Want the point to be in the orthogonal plane of the tangent, since
+                    // the cross-sections of the shell are circular in that plane
+                    float dot = Vector3.Dot(childOffset.normalized, parentT.normalized);
+
+                    if (Mathf.Abs(dot) < minDot)
+                    {
+                        minDot = Mathf.Abs(dot);
+                        closestPoint = childPos;
+                        closestArc = childArc;
+                    }
+                }
+
+                Debug.Log("Min dot at arc " + arcPos + " = " + minDot + " at child arc " + closestArc);
+
+                // Don't count the change if the dot product is too large, because this probably means
+                // we went past the end of the arc segment.
+                if (minDot > 0.25f) continue;
+
+                // Write out the parameters for the circle in the child shell
+                Vector3 closestTangent = FrameAlongHelix(child.curvature, child.torsion, closestArc).T;
+                // Get the farthest point on the outside of the child shell
+                Vector3 farthest = FarthestPointOnCircle(closestPoint, closestTangent, child.radius, parentPos);
+                float requiredRadius = Vector3.Distance(farthest, parentPos);
+
+                maxRequiredRadius = Mathf.Max(requiredRadius, maxRequiredRadius);
+            }
+            // Account for wall thickness
+            maxRequiredRadius += Constants.DEFAULT_WALL_THICKNESS;
+
+            Debug.Log("Required = " + maxRequiredRadius + ", current = " + parent.radius);
+
+            // Widen the parent so it contains the child shell.
+            // However, don't ever decrease the thickness.
+            parent.radius = Mathf.Max(parent.radius, maxRequiredRadius);
+        }
+
         public static void growParentToChild(TelescopeParameters parent, TelescopeParameters child, bool shrinkFit=false)
         {
             // Compute the coordinates of the child's starting position,
@@ -267,7 +325,7 @@ namespace Telescopes
                 if (!shrinkFit) finalRadius = Mathf.Max(finalRadius, parent.radius);
             }
             float widthChange = finalRadius - parent.radius;
-            
+
             parent.radius = finalRadius;
             // parent.thickness += widthChange;
         }
@@ -278,7 +336,15 @@ namespace Telescopes
             // to contain its child.
             for (int i = parameters.Count - 1; i > 0; i--)
             {
-                TelescopeUtils.growParentToChild(parameters[i - 1], parameters[i], shrinkFit);
+                if (parameters[i-1].torsion != parameters[i].torsion)
+                {
+                    TelescopeUtils.growParentToChildHelix(parameters[i - 1], parameters[i], shrinkFit);
+                }
+                else
+                {
+                    TelescopeUtils.growParentToChild(parameters[i - 1], parameters[i], shrinkFit);
+                }
+
             }
 
         }

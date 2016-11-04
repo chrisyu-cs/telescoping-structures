@@ -11,8 +11,8 @@ namespace Telescopes
 
         List<Vector3> displayPoints;
 
-        public DCurveBulb StartBulb;
-        public DCurveBulb EndBulb;
+        public DCurveBulb StartJuncture;
+        public DCurveBulb EndJuncture;
 
         private static int numScopes = 0;
 

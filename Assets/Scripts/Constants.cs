@@ -25,7 +25,7 @@ namespace Telescopes
 
         public const int CUTS_PER_CYLINDER = 20;
         public const int VERTS_PER_CIRCLE = 90;
-        public const int OVERHANG_CUTS = 0;
+        public const int OVERHANG_CUTS = 5;
 
         public const int GROOVE_CUT_RADIUS = 3;
         public const int FIN_CUTS = 3;

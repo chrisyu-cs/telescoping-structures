@@ -36,6 +36,12 @@ namespace Telescopes
 
         public TelescopingSegment containingSegment;
 
+        List<Vector3> bottomVerts;
+        List<Vector3> topVerts;
+
+        public List<Vector3> BottomRing { get { return bottomVerts; } }
+        public List<Vector3> TopRing { get { return topVerts; } }
+
         public Mesh mesh
         {
             get { return mFilter.mesh; }
@@ -299,6 +305,8 @@ namespace Telescopes
             List<IndexedVertex> topOuter = outer.circleCuts[numCuts - 1];
             List<IndexedVertex> topInner = inner.circleCuts[numCuts - 1];
 
+            topVerts = topOuter.ConvertAll<Vector3>(new Converter<IndexedVertex, Vector3>(IndexedVertex.toVector3));
+
             if (topOuter.Count != topInner.Count)
             {
                 throw new System.Exception("Circles do not have same number of vertices.");
@@ -329,6 +337,8 @@ namespace Telescopes
 
             List<IndexedVertex> bottomOuter = outer.circleCuts[0];
             List<IndexedVertex> bottomInner = inner.circleCuts[0];
+
+            bottomVerts = bottomOuter.ConvertAll<Vector3>(new Converter<IndexedVertex, Vector3>(IndexedVertex.toVector3));
 
             if (bottomOuter.Count != bottomInner.Count)
             {
