@@ -154,7 +154,7 @@ namespace Telescopes
                 // If the child is smaller, we make a forward-extending telescope.
                 if (tcp.node.radius <= node.radius)
                 {
-                    TelescopingSegment childSegment = TelescopeUtils.telescopeOfCone(node.position, node.radius,
+                    TelescopeSegment childSegment = TelescopeUtils.telescopeOfCone(node.position, node.radius,
                         tcp.node.position, tcp.node.radius, tcp.curvatureCenter, useCurvature: tcp.hasCurvature);
                     childSegment.parent = rootBulb;
                     childSegment.parentElementNumber = 0;
@@ -163,7 +163,7 @@ namespace Telescopes
                 }
                 // Otherwise we make a backward-extending telescope, and reverse it.
                 else {
-                    TelescopingSegment childSegment = TelescopeUtils.telescopeOfCone(tcp.node.position, tcp.node.radius,
+                    TelescopeSegment childSegment = TelescopeUtils.telescopeOfCone(tcp.node.position, tcp.node.radius,
                         node.position, node.radius, tcp.curvatureCenter, useCurvature: tcp.hasCurvature);
                     childSegment.ReverseTelescope();
                     childSegment.keepLocalPositionOnStart = true;

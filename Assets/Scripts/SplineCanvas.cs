@@ -360,7 +360,7 @@ namespace Telescopes
                         float startRadius = tic.NumSegments * Constants.DEFAULT_WALL_THICKNESS + 0.2f
                             + (tic.ArcLength * Constants.TAPER_SLOPE);
 
-                        TelescopingSegment seg;
+                        TelescopeSegment seg;
                         
                         // Need to address four cases, corresponding to whether or not
                         // the segment is connected to a juncture at the beginning and end.

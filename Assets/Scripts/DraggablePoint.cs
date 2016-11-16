@@ -27,16 +27,13 @@ namespace Telescopes
             if (Type == PointType.Bulb) return;
             if (parentSpline.points.Count < 4) return;
 
-            int tangentIndex;
             if (index == 1)
             {
-                tangentIndex = 0;
                 parentSpline.StartBulb = bulb;
                 splinesStart.Add(parentSpline);
             }
             else if (index == parentSpline.points.Count - 2)
             {
-                tangentIndex = parentSpline.points.Count - 1;
                 parentSpline.EndBulb = bulb;
                 splinesEnd.Add(parentSpline);
             }

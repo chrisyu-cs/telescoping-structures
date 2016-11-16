@@ -242,7 +242,7 @@ namespace Telescopes
             return world;
         }
 
-        public TelescopingSegment MakeTelescope(float startRadius, bool reverse = false)
+        public TelescopeSegment MakeTelescope(float startRadius, bool reverse = false)
         {
             List<TelescopeParameters> tParams = new List<TelescopeParameters>();
 
@@ -274,7 +274,7 @@ namespace Telescopes
             GameObject obj = new GameObject();
             obj.name = "telescope" + (numScopes++);
 
-            TelescopingSegment segment = obj.AddComponent<TelescopingSegment>();
+            TelescopeSegment segment = obj.AddComponent<TelescopeSegment>();
             segment.paramMode = SegmentParametersMode.Concrete;
             segment.material = DesignerController.instance.defaultTelescopeMaterial;
 

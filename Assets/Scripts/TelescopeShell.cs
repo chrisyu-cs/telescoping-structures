@@ -8,7 +8,7 @@ namespace Telescopes
     /// A class that represents a telescoping shell.
     /// </summary>
     [RequireComponent(typeof(MeshFilter))]
-    public class TelescopingShell : TelescopeElement
+    public class TelescopeShell : TelescopeElement
     {
         private MeshFilter mFilter;
         private MeshRenderer mRenderer;
@@ -34,10 +34,12 @@ namespace Telescopes
         private float targetRatio = 0;
         private float ratioInterpTime = 0;
 
-        public TelescopingSegment containingSegment;
+        public TelescopeSegment containingSegment;
 
         List<Vector3> bottomVerts;
         List<Vector3> topVerts;
+
+        bool HasOverhang;
 
         public List<Vector3> BottomRing { get { return bottomVerts; } }
         public List<Vector3> TopRing { get { return topVerts; } }
@@ -45,6 +47,11 @@ namespace Telescopes
         public Mesh mesh
         {
             get { return mFilter.mesh; }
+        }
+
+        public Bounds WorldSpaceBounds
+        {
+            get { return mRenderer.bounds; }
         }
 
         // Use this for initialization
@@ -119,7 +126,18 @@ namespace Telescopes
             return translationOfDistance(arcLength);
         }
 
+        Vector3 getLocalLocationAlongPath(float t, float curvature, float torsion)
+        {
+            float arcLength = t * length;
+            return translationOfDistance(arcLength, curvature, torsion);
+        }
+
         public Vector3 translationOfDistance(float arcLength)
+        {
+            return TelescopeUtils.TranslateAlongHelix(curvature, torsion, arcLength);
+        }
+
+        Vector3 translationOfDistance(float arcLength, float curvature, float torsion)
         {
             return TelescopeUtils.TranslateAlongHelix(curvature, torsion, arcLength);
         }
@@ -129,13 +147,23 @@ namespace Telescopes
             // Nothing; individual shells don't extend.
         }
 
+        public Quaternion rotationOfDistance(float arcLength, float curvature, float torsion)
+        {
+            return TelescopeUtils.RotateAlongHelix(curvature, torsion, arcLength);
+        }
+
         public Quaternion getLocalRotationAlongPath(float t)
+        {
+            return getLocalRotationAlongPath(t, curvature, torsion);
+        }
+
+        Quaternion getLocalRotationAlongPath(float t, float curvature, float torsion)
         {
             if (curvature > 1e-6)
             {
                 // Compute how many radians along the circle we moved.
                 float arcLength = t * length;
-                Quaternion rotation = rotationOfDistance(arcLength);
+                Quaternion rotation = rotationOfDistance(arcLength, curvature, torsion);
                 return rotation;
             }
             else
@@ -144,20 +172,25 @@ namespace Telescopes
             }
         }
 
-        public Quaternion rotationOfDistance(float arcLength)
-        {
-            return TelescopeUtils.RotateAlongHelix(curvature, torsion, arcLength);
-        }
-
         public Vector3 getDirectionAlongPath(float t)
         {
             // TODO: compute as if moving along circle
             return getLocalRotationAlongPath(t) * Vector3.forward;
         }
 
+        Vector3 getDirectionAlongPath(float t, float curvature, float torsion)
+        {
+            return getLocalRotationAlongPath(t, curvature, torsion) * Vector3.forward;
+        }
+
         public Vector3 getNormalAlongPath(float t)
         {
             return getLocalRotationAlongPath(t) * Vector3.up;
+        }
+
+        public Vector3 getNormalAlongPath(float t, float curvature, float torsion)
+        {
+            return getLocalRotationAlongPath(t, curvature, torsion) * Vector3.up;
         }
 
         bool IsInRadius(int x, int bound1, int bound2, int radius)
@@ -312,25 +345,46 @@ namespace Telescopes
                 throw new System.Exception("Circles do not have same number of vertices.");
             }
 
+            // Since the cuts are not necessarily aligned (in the case of curvature
+            // or torsion changes), we want to stitch using the closest pairs of vertices.
+            // Since we start with outer vertex i = 0, find the index of the inner vertex
+            // closest to outer 0.
+            Vector3 outer0top = topOuter[0].vertex;
+            int topInnerOffset = 0;
+            float closestDistance = Vector3.Distance(outer0top, topInner[0].vertex);
+
+            for (int i = 0; i < topInner.Count; i++)
+            {
+                float dist = Vector3.Distance(topInner[i].vertex, outer0top);
+                if (dist < closestDistance)
+                {
+                    closestDistance = dist;
+                    topInnerOffset = i;
+                }
+            }
+
             // To join the top rim, we need to add the triangles with
             // counterclockwise ordering, since the vertices are clockwise
             // when viewed from below (not above).
-            for (int i = 0; i < topOuter.Count; i++)
+            for (int outerI = 0; outerI < topOuter.Count; outerI++)
             {
-                int iPlus = (i + 1) % topOuter.Count;
+                int outerIPlus = (outerI + 1) % topOuter.Count;
+                int innerI = (outerI + topInnerOffset) % topInner.Count;
+                int innerIPlus = (innerI + 1) % topInner.Count;
+
                 // The triangles with two vertices in the outer circle have
                 // the order outer[i], inner[i], outer[i+1].
-                IndexedVertex iv1 = topOuter[i];
-                IndexedVertex iv2 = topInner[i];
-                IndexedVertex iv3 = topOuter[iPlus];
+                IndexedVertex iv1 = topOuter[outerI];
+                IndexedVertex iv2 = topInner[innerI];
+                IndexedVertex iv3 = topOuter[outerIPlus];
                 IndexTriangle tri = new IndexTriangle(iv1, iv2, iv3);
                 triangles.Add(tri);
 
                 // The triangles with two vertices in the inner circle have
                 // the order inner[i], inner[i+1], outer[i+1].
-                iv1 = topInner[i];
-                iv2 = topInner[iPlus];
-                iv3 = topOuter[iPlus];
+                iv1 = topInner[innerI];
+                iv2 = topInner[innerIPlus];
+                iv3 = topOuter[outerIPlus];
                 tri = new IndexTriangle(iv1, iv2, iv3);
                 triangles.Add(tri);
             }
@@ -345,23 +399,42 @@ namespace Telescopes
                 throw new System.Exception("Circles do not have same number of vertices.");
             }
 
-            // To join the bottom faces, we add triangles with vertices in clockwise order.
-            for (int i = 0; i < bottomOuter.Count; i++)
+            // Same procedure as top ring: find starting vertex closest to
+            // vertex 0 of outer ring.
+            Vector3 outer0bottom = bottomOuter[0].vertex;
+            int bottomInnerOffset = 0;
+            closestDistance = Vector3.Distance(outer0bottom, bottomInner[0].vertex);
+
+            for (int i = 0; i < bottomInner.Count; i++)
             {
-                int iPlus = (i + 1) % bottomOuter.Count;
+                float dist = Vector3.Distance(bottomInner[i].vertex, outer0bottom);
+                if (dist < closestDistance)
+                {
+                    closestDistance = dist;
+                    bottomInnerOffset = i;
+                }
+            }
+
+            // To join the bottom faces, we add triangles with vertices in clockwise order.
+            for (int outerI = 0; outerI < bottomOuter.Count; outerI++)
+            {
+                int outerIPlus = (outerI + 1) % bottomOuter.Count;
+                int innerI = (outerI + bottomInnerOffset) % bottomInner.Count;
+                int innerIPlus = (innerI + 1) % bottomInner.Count;
+
                 // The triangles with two vertices in the outer circle have
                 // the order outer[i], outer[i+1], inner[i].
-                IndexedVertex iv1 = bottomOuter[i];
-                IndexedVertex iv2 = bottomOuter[iPlus];
-                IndexedVertex iv3 = bottomInner[i];
+                IndexedVertex iv1 = bottomOuter[outerI];
+                IndexedVertex iv2 = bottomOuter[outerIPlus];
+                IndexedVertex iv3 = bottomInner[innerI];
                 IndexTriangle tri = new IndexTriangle(iv1, iv2, iv3);
                 triangles.Add(tri);
 
                 // The triangles with two vertices in the inner circle have
                 // the order inner[i], outer[i+1], inner[i+1].
-                iv1 = bottomInner[i];
-                iv2 = bottomOuter[iPlus];
-                iv3 = bottomInner[iPlus];
+                iv1 = bottomInner[innerI];
+                iv2 = bottomOuter[outerIPlus];
+                iv3 = bottomInner[innerIPlus];
                 tri = new IndexTriangle(iv1, iv2, iv3);
                 triangles.Add(tri);
             }
@@ -369,7 +442,69 @@ namespace Telescopes
             return triangles;
         }
 
-        CylinderMesh GenerateCylinder(float length, float radius, float curvatureAmount, float slope,
+        List<IndexTriangle> CloseCylinderCaps(CylinderMesh cylinder, List<IndexedVertex> verts)
+        {
+            List<IndexTriangle> triangles = new List<IndexTriangle>();
+
+            List<IndexedVertex> bottomCircle = cylinder.circleCuts[0];
+            List<IndexedVertex> topCircle = cylinder.circleCuts[cylinder.circleCuts.Count - 1];
+
+            // Compute center point of bottom circle.
+            Vector3 bottomCenter = Vector3.zero;
+            foreach (IndexedVertex v in bottomCircle)
+            {
+                bottomCenter += v.vertex;
+            }
+            bottomCenter /= bottomCircle.Count;
+
+            // Compute center point of top circle.
+            Vector3 topCenter = Vector3.zero;
+            foreach (IndexedVertex v in topCircle)
+            {
+                topCenter += v.vertex;
+            }
+            topCenter /= topCircle.Count;
+
+            // Add the two points to the mesh.
+            IndexedVertex bottomCenterVert = new IndexedVertex(bottomCenter, currentIndex);
+            currentIndex++;
+            IndexedVertex topCenterVert = new IndexedVertex(topCenter, currentIndex);
+            currentIndex++;
+
+            verts.Add(bottomCenterVert);
+            verts.Add(topCenterVert);
+
+            // Add triangle fans.
+            for (int i = 0; i < bottomCircle.Count; i++)
+            {
+                // Bottom circle gets CCW order
+                int iPlus = (i + 1) % bottomCircle.Count;
+
+                IndexedVertex i1 = bottomCenterVert;
+                IndexedVertex i2 = bottomCircle[i];
+                IndexedVertex i3 = bottomCircle[iPlus];
+
+                IndexTriangle tri = new IndexTriangle(i1, i2, i3);
+                triangles.Add(tri);
+            }
+
+            for (int i = 0; i < topCircle.Count; i++)
+            {
+                // Top circle gets CW order
+                int iPlus = (i + 1) % topCircle.Count;
+
+                IndexedVertex i1 = topCenterVert;
+                IndexedVertex i2 = topCircle[iPlus];
+                IndexedVertex i3 = topCircle[i];
+
+                IndexTriangle tri = new IndexTriangle(i1, i2, i3);
+                triangles.Add(tri);
+            }
+            
+            return triangles;
+        }
+
+        CylinderMesh GenerateCylinder(TelescopeParameters tParams, float slope,
             bool innerGroove = false, bool outerGroove = false, bool overhang = true)
         {
             // We basically need to sweep a circular cross-section along a circular path.
@@ -384,16 +519,16 @@ namespace Telescopes
             // Generate vertices
             for (int i = 0; i < numCircles; i++)
             {
-                radiusLoss = i * lengthStep * slope * length;
-                Vector3 centerPoint = getLocalLocationAlongPath(i * lengthStep);
-                Vector3 facingDirection = getDirectionAlongPath(i * lengthStep);
-                Vector3 normalDirection = getNormalAlongPath(i * lengthStep);
+                radiusLoss = i * lengthStep * slope * tParams.length;
+                Vector3 centerPoint = getLocalLocationAlongPath(i * lengthStep, tParams.curvature, tParams.torsion);
+                Vector3 facingDirection = getDirectionAlongPath(i * lengthStep, tParams.curvature, tParams.torsion);
+                Vector3 normalDirection = getNormalAlongPath(i * lengthStep, tParams.curvature, tParams.torsion);
 
                 bool doInner = (innerGroove && i < Constants.CUTS_PER_CYLINDER + Constants.FIN_CUTS);
                 bool doOuter = (outerGroove && i <= Constants.FIN_CUTS);
 
                 List<IndexedVertex> circle = GenerateCircle(i, centerPoint, facingDirection, normalDirection,
-                    radius - radiusLoss, addInnerGrooves: doInner, addOuterGroove: doOuter);
+                    tParams.radius - radiusLoss, addInnerGrooves: doInner, addOuterGroove: doOuter);
                 circles.Add(circle);
             }
 
@@ -410,15 +545,113 @@ namespace Telescopes
             return cm;
         }
 
-        public void GenerateGeometry(TelescopeParameters theParams, float nextTwist, bool overhang = true)
+        CylinderMesh GenerateInnerCylinder(TelescopeParameters nextParams, bool overhang, float arcOffset)
         {
+            TelescopeParameters ourParams = getParameters();
+            CylinderMesh innerCyl;
+
+            // If there is a change in torsion from this shell to the next...
+            if (nextParams != null && (nextParams.curvature != curvature || nextParams.torsion != torsion))
+            {
+                // Generate the outer profile of the child shell; this will become
+                // the inner profile of this shell.
+                TelescopeParameters innerParams = new TelescopeParameters(nextParams.length, nextParams.radius,
+                    nextParams.thickness, nextParams.curvature, nextParams.torsion, nextParams.twistFromParent);
+                innerCyl = GenerateCylinder(innerParams,
+                    Constants.TAPER_SLOPE, innerGroove: true, overhang: overhang);
+
+                // Move and rotate the inner profile so that the end circles align.
+                Quaternion alignRotation = TelescopeUtils.childBaseRotation(ourParams, nextParams);
+                Vector3 alignTranslation = TelescopeUtils.childBasePosition(ourParams, nextParams);
+
+                Quaternion backRotation = TelescopeUtils.RotateAlongHelix(nextParams.curvature,
+                    nextParams.torsion, arcOffset);
+                Vector3 backTranslation = TelescopeUtils.TranslateAlongHelix(nextParams.curvature,
+                    nextParams.torsion, arcOffset);
+
+                innerCyl.ApplyRotation(backRotation);
+                innerCyl.ApplyTranslation(backTranslation);
+
+                innerCyl.ApplyRotation(alignRotation);
+                innerCyl.ApplyTranslation(alignTranslation);
+
+                Debug.Log("Outer radius = " + radius + ", inner radius = " + nextParams.radius);
+            }
+
+            else
+            {
+                TelescopeParameters innerParams = new TelescopeParameters(length, radius - thickness,
+                    thickness, curvature, torsion, 0);
+
+                innerCyl = GenerateCylinder(innerParams,
+                    Constants.TAPER_SLOPE, innerGroove: true, overhang: overhang);
+
+                if (nextParams != null)
+                {
+                    Quaternion backRotation = TelescopeUtils.RotateAlongHelix(nextParams.curvature,
+                        nextParams.torsion, arcOffset);
+                    Vector3 backTranslation = TelescopeUtils.TranslateAlongHelix(nextParams.curvature,
+                        nextParams.torsion, arcOffset);
+
+                    innerCyl.ApplyRotation(backRotation);
+                    innerCyl.ApplyTranslation(backTranslation);
+                }
+            }
+
+            return innerCyl;
+        }
+
+        public Mesh GenerateInnerVolume(TelescopeParameters nextParams, float arcOffset)
+        {
+            currentIndex = 0;
+
+            Mesh mesh = new Mesh();
+
+            // Get the inner cylinder of the shell
+            CylinderMesh inner = GenerateInnerCylinder(nextParams, HasOverhang, arcOffset);
+
+            // Get the vertices
+            List<IndexedVertex> verticesList = flattenList(inner.circleCuts);
+            // Create the triangles for the two ends of the cylinder; this also
+            // adds 2 vertices to the list.
+            List<IndexTriangle> capTris = CloseCylinderCaps(inner, verticesList);
+            // Get the positions out of the list
+            List<Vector3> vertices = verticesList.ConvertAll(new
+                System.Converter<IndexedVertex, Vector3>(IndexedVertex.toVector3));
+            List<int> indicesList = new List<int>();
+            
+            // Add triangles for the cylinder itself
+            foreach (IndexTriangle tri in inner.triangles)
+            {
+                tri.addFrontFace(indicesList);
+            }
+
+            // Add triangles for the two ends
+            foreach (IndexTriangle tri in capTris)
+            {
+                tri.addFrontFace(indicesList);
+            }
+
+            mesh.vertices = vertices.ToArray();
+            mesh.triangles = indicesList.ToArray();
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+
+            return mesh;
+        }
+
+        public void GenerateGeometry(TelescopeParameters theParams, TelescopeParameters nextParams,
+            bool overhang = true, bool outerGroove = true)
+        {
+            HasOverhang = overhang;
+
             this.thickness = theParams.thickness;
             this.length = theParams.length;
             this.radius = theParams.radius;
             this.curvature = theParams.curvature;
             this.torsion = theParams.torsion;
             this.twistAngle = theParams.twistFromParent;
-            this.nextTwistAngle = nextTwist;
+            this.nextTwistAngle = (nextParams != null) ? nextParams.twistFromParent : 0;
 
             // Reset the mesh.
             currentIndex = 0;
@@ -426,10 +659,14 @@ namespace Telescopes
 
             float slopeCosmetic = thickness * Constants.COSMETIC_TAPER_RATIO;
 
-            CylinderMesh outerCyl = GenerateCylinder(length, radius - Constants.SHELL_GAP, curvature,
-                slopeCosmetic + Constants.TAPER_SLOPE, outerGroove: true, overhang: overhang);
-            CylinderMesh innerCyl = GenerateCylinder(length, radius - thickness, curvature,
-                Constants.TAPER_SLOPE, innerGroove: true, overhang: overhang);
+            TelescopeParameters outerParams = new TelescopeParameters(length, radius - Constants.SHELL_GAP,
+                thickness, curvature, torsion, 0);
+
+            CylinderMesh outerCyl = GenerateCylinder(outerParams,
+                slopeCosmetic + Constants.TAPER_SLOPE,
+                outerGroove: outerGroove, overhang: overhang);
+
+            CylinderMesh innerCyl = GenerateInnerCylinder(nextParams, overhang, 0);
 
             // Flatten vertex list
             List<IndexedVertex> outerVerts = flattenList(outerCyl.circleCuts);
@@ -467,8 +704,11 @@ namespace Telescopes
 
             mFilter.mesh.RecalculateBounds();
             mFilter.mesh.RecalculateNormals();
+        }
 
-            //AddFins();
+        public void ReplaceMesh(Mesh m)
+        {
+            mFilter.mesh = m;
         }
 
         public float getTaperLoss()
@@ -508,7 +748,7 @@ namespace Telescopes
 
             else
             {
-                TelescopingShell parent = transform.parent.GetComponent<TelescopingShell>();
+                TelescopeShell parent = transform.parent.GetComponent<TelescopeShell>();
                 if (!parent) return;
 
                 Vector3 localTranslation = parent.getInvLocationAlongPath(extendT);
@@ -544,6 +784,28 @@ namespace Telescopes
         {
             circleCuts = vs;
             triangles = ts;
+        }
+
+        public void ApplyRotation(Quaternion rotation)
+        {
+            foreach (List<IndexedVertex> circle in circleCuts)
+            {
+                foreach (IndexedVertex vert in circle)
+                {
+                    vert.vertex = rotation * vert.vertex;
+                }
+            }
+        }
+
+        public void ApplyTranslation(Vector3 translation)
+        {
+            foreach (List<IndexedVertex> circle in circleCuts)
+            {
+                foreach (IndexedVertex vert in circle)
+                {
+                    vert.vertex = vert.vertex + translation;
+                }
+            }
         }
     }
 

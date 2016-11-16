@@ -9,7 +9,10 @@ public class Outline8 : ModifiedShadow
         if (!IsActive())
             return;
 
-        verts.Capacity = verts.Count * 9;
+        var neededCapacity = verts.Count * 9;
+        if (verts.Capacity < neededCapacity)
+            verts.Capacity = neededCapacity;
+
         var original = verts.Count;
         var count = 0;
         for (int x = -1; x <= 1; x++)

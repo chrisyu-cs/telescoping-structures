@@ -8,9 +8,14 @@ namespace Telescopes
 {
     public static class STLWriter
     {
-        delegate Vector3 VectorTransform(Vector3 v);
+        public delegate Vector3 VectorTransform(Vector3 v);
 
-        public static void WriteSTLOfSegment(TelescopingSegment segment, string filename)
+        public static void WriteSTLOfHierarchy(TelescopeElement rootElement, string filename)
+        {
+
+        }
+
+        public static void WriteSTLOfSegment(TelescopeSegment segment, string filename)
         {
             Debug.Log("Write STL to " + filename);
 
@@ -22,7 +27,7 @@ namespace Telescopes
 
             float minX = 0, minY = 0, minZ = 0;
 
-            foreach (TelescopingShell shell in segment.shells)
+            foreach (TelescopeShell shell in segment.shells)
             {
                 VectorTransform WorldSpace = (v => shell.transform.rotation * v + shell.transform.position);
 
@@ -36,7 +41,7 @@ namespace Telescopes
 
             Vector3 stlOffset = new Vector3(-minX, -minY, -minZ);
             
-            foreach (TelescopingShell shell in segment.shells)
+            foreach (TelescopeShell shell in segment.shells)
             {
                 VectorTransform ShellTransform = (v =>
                     shell.transform.rotation * v + shell.transform.position + stlOffset);
@@ -55,11 +60,22 @@ namespace Telescopes
             File.WriteAllLines(s, lines.ToArray());
         }
 
+        public static void WriteSTLOfMesh(Mesh m, string s, VectorTransform f)
+        {
+            List<string> lines = STLOfMesh(m, f);
+            File.WriteAllLines(s, lines.ToArray());
+        }
+
         public static List<string> STLOfMesh(Mesh m)
         {
             Bounds b = m.bounds;
+            VectorTransform f = (v => v - (1.001f * b.min));
 
-            VectorTransform f = (v => v - b.min);
+            return STLOfMesh(m, f);
+        }
+
+        public static List<string> STLOfMesh(Mesh m, VectorTransform f)
+        {
             List<string> facets = FacetsOfMesh(m, f);
 
             facets.Insert(0, "solid " + m.name);
@@ -68,13 +84,15 @@ namespace Telescopes
             return facets;
         }
 
+
         delegate string StringOfVector(Vector3 v);
 
         static void CheckPositiveOctant(Vector3 v)
         {
             if (v.x < 0 || v.y < 0 || v.z < 0)
             {
-                throw new System.Exception("Vector not in positive octant " + v);
+                throw new System.Exception("Vector not in positive octant ("
+                    + v.x + ", " + v.y + ", " + v.z + ")");
             }
         }
 

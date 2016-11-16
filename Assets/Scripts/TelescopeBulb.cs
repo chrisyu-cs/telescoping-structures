@@ -13,8 +13,8 @@ namespace Telescopes
 
         public bool keepLocalPositionOnStart = false;
 
-        public TelescopingSegment parentSegment;
-        public List<TelescopingSegment> childSegments;
+        public TelescopeSegment parentSegment;
+        public List<TelescopeSegment> childSegments;
 
         public GameObject sphereObject;
 
@@ -62,7 +62,7 @@ namespace Telescopes
             this.transform.localRotation = parentElement.getAttachmentRotation(attachmentPoint);
         }
 
-        public void SetParentToSegmentEnd(TelescopingSegment segment)
+        public void SetParentToSegmentEnd(TelescopeSegment segment)
         {
             parent = segment;
             parentElementNum = segment.shells.Count - 1;
@@ -79,7 +79,7 @@ namespace Telescopes
             return area;
         }
 
-        TelescopingShell AttachedShellForChild(TelescopingSegment seg)
+        TelescopeShell AttachedShellForChild(TelescopeSegment seg)
         {
             if (!seg.Reversed)
             {
@@ -90,7 +90,7 @@ namespace Telescopes
             }
         }
 
-        TelescopingShell AttachedShellForParent(TelescopingSegment seg)
+        TelescopeShell AttachedShellForParent(TelescopeSegment seg)
         {
             if (!seg.Reversed)
             {
@@ -102,7 +102,7 @@ namespace Telescopes
             }
         }
 
-        Vector3 contactDirection(TelescopingShell shell, bool reversed)
+        Vector3 contactDirection(TelescopeShell shell, bool reversed)
         {
             if (!reversed) return shell.transform.forward;
             else

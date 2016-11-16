@@ -8,6 +8,20 @@ namespace Telescopes
         static int segmentCount = 0;
 
         /// <summary>
+        /// Returns the coordinate-wise min of two vectors.
+        /// </summary>
+        /// <param name="v1"></param>
+        /// <param name="v2"></param>
+        /// <returns></returns>
+        public static Vector3 VectorMin(Vector3 v1, Vector3 v2)
+        {
+            return new Vector3(
+                Mathf.Min(v1.x, v2.x),
+                Mathf.Min(v1.y, v2.y),
+                Mathf.Min(v1.z, v2.z));
+        }
+
+        /// <summary>
         /// Converts a discrete curvature (bend angle) to the continuous quantity.
         /// </summary>
         /// <param name="discreteAngle"></param>
@@ -56,7 +70,7 @@ namespace Telescopes
 
             // This treats (0, 0, 0) as the center and (0, 0, a) as the first point.
             // Want to treat (0, -a, 0) as the first point, so rotate.
-            Quaternion r = Quaternion.FromToRotation(Vector3.forward, Vector3.down);
+            //Quaternion r = Quaternion.FromToRotation(Vector3.forward, Vector3.down);
 
             pos.y *= -1;
 
@@ -131,7 +145,7 @@ namespace Telescopes
             OrthonormalFrame frame = FrameAlongHelix(curvature, torsion, arcLength);
 
             // Corrective rotation so that initial tangent is forward.
-            Quaternion r = Quaternion.FromToRotation(Vector3.forward, Vector3.down);
+            //Quaternion r = Quaternion.FromToRotation(Vector3.forward, Vector3.down);
 
             return correctiveR * Quaternion.LookRotation(frame.T, frame.N);
         }
@@ -178,6 +192,16 @@ namespace Telescopes
             return rotation;
         }
 
+        /// <summary>
+        /// Returns the local position of a child shell with the given parameters,
+        /// such that (when combined with the local rotation from childBaseRotation)
+        /// the end cross-section of the child will be perfectly aligned
+        /// with the end cross-section of the parent with its parameters.
+        /// </summary>
+        /// <param name="parent"></param>
+        /// <param name="child"></param>
+        /// <param name="useTorsion"></param>
+        /// <returns></returns>
         public static Vector3 childBasePosition(TelescopeParameters parent,
             TelescopeParameters child, bool useTorsion = true)
         {
@@ -191,6 +215,16 @@ namespace Telescopes
             return translationToBase;
         }
 
+        /// <summary>
+        /// Returns the local rotation of a child shell with the given parameters,
+        /// such that, when used with the local position from childBasePosition,
+        /// the end cross-section of the child will be perfectly aligned
+        /// with the end cross-section of the parent with its parameters.
+        /// </summary>
+        /// <param name="parent"></param>
+        /// <param name="child"></param>
+        /// <param name="useTorsion"></param>
+        /// <returns></returns>
         public static Quaternion childBaseRotation(TelescopeParameters parent,
             TelescopeParameters child, bool useTorsion = true)
         {
@@ -286,9 +320,6 @@ namespace Telescopes
             Vector3 childBasePos = childBasePosition(parent, child);
             Quaternion childBaseRot = childBaseRotation(parent, child);
 
-            Debug.Log("Deviation due to torsion (parent " + parent.torsion +
-                ", child " + child.torsion + ")" + " = " + childBasePos);
-
             Vector3 childOutward = childBaseRot * Vector3.down;
 
             // Compute the two inner corners of the child, when nested inside its
@@ -324,7 +355,6 @@ namespace Telescopes
                 finalRadius = Mathf.Max(innerDiff, outerDiff) + parent.thickness;
                 if (!shrinkFit) finalRadius = Mathf.Max(finalRadius, parent.radius);
             }
-            float widthChange = finalRadius - parent.radius;
 
             parent.radius = finalRadius;
             // parent.thickness += widthChange;
@@ -336,7 +366,7 @@ namespace Telescopes
             // to contain its child.
             for (int i = parameters.Count - 1; i > 0; i--)
             {
-                if (parameters[i-1].torsion != parameters[i].torsion)
+                if (parameters[i-1].torsion != 0 || parameters[i].torsion != 0)
                 {
                     TelescopeUtils.growParentToChildHelix(parameters[i - 1], parameters[i], shrinkFit);
                 }
@@ -384,7 +414,7 @@ namespace Telescopes
             bulb.transform.position = position;
             bulb.SetMaterial(DesignerController.instance.defaultTelescopeMaterial);
 
-            bulb.childSegments = new List<TelescopingSegment>();
+            bulb.childSegments = new List<TelescopeSegment>();
 
             return bulb;
         }
@@ -428,13 +458,13 @@ namespace Telescopes
             return inPlanePerp.normalized;
         }
 
-        public static TelescopingSegment telescopeOfCone(Vector3 startPos, float startRadius,
+        public static TelescopeSegment telescopeOfCone(Vector3 startPos, float startRadius,
             Vector3 endPos, float endRadius, float wallThickness = Constants.DEFAULT_WALL_THICKNESS)
         {
             return telescopeOfCone(startPos, startRadius, endPos, endRadius, Vector3.zero);
         }
 
-        public static TelescopingSegment telescopeOfCone(Vector3 startPos, float startRadius,
+        public static TelescopeSegment telescopeOfCone(Vector3 startPos, float startRadius,
             Vector3 endPos, float endRadius, Vector3 curvatureCenter,
             float wallThickness = Constants.DEFAULT_WALL_THICKNESS,
             bool useCurvature = false)
@@ -484,8 +514,6 @@ namespace Telescopes
             {
                 // Compute twist angles
                 Quaternion rotationToOrigin = Quaternion.FromToRotation(Vector3.forward, segmentDirection);
-                // The "up" direction we get if we just perform this rotation.
-                Vector3 untwistedUp = rotationToOrigin * Vector3.up;
                 // The "up" direction we would like to have -- orthogonal direction from circle center.
                 Vector3 startEnd = endPos - startPos;
                 Vector3 desiredUp = startEnd - Vector3.Dot(segmentDirection, startEnd) * segmentDirection;
@@ -523,7 +551,7 @@ namespace Telescopes
             obj.name = "segment" + segmentCount;
             segmentCount++;
             obj.transform.position = startPos;
-            TelescopingSegment seg = obj.AddComponent<TelescopingSegment>();
+            TelescopeSegment seg = obj.AddComponent<TelescopeSegment>();
             seg.material = DesignerController.instance.defaultTelescopeMaterial;
             seg.initialDirection = segmentDirection;
             

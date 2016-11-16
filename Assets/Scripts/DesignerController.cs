@@ -9,7 +9,7 @@ namespace Telescopes
         public static DesignerController instance;
         public DesignerMode currentMode;
         public Text modeText;
-        private TelescopingShell selected;
+        private TelescopeShell selected;
 
         public InputField lengthField;
         public InputField radiusField;
@@ -56,6 +56,8 @@ namespace Telescopes
         public SplineCanvas splineCanvas;
 
         public MeshFilter currentMesh;
+
+        public Mesh SphereMesh;
 
         void Awake()
         {
@@ -144,7 +146,7 @@ namespace Telescopes
 
             if (Input.GetMouseButtonDown(0) && RaycastShells(Input.mousePosition, out hitInfo))
             {
-                TelescopingShell selection = hitInfo.collider.GetComponent<TelescopingShell>();
+                TelescopeShell selection = hitInfo.collider.GetComponent<TelescopeShell>();
                 DraggablePoint draggablePt = hitInfo.collider.GetComponent<DraggablePoint>();
 
                 if (selection) SelectShell(selection);
@@ -263,7 +265,7 @@ namespace Telescopes
             selected = null;
         }
 
-        public void SelectShell(TelescopingShell selection)
+        public void SelectShell(TelescopeShell selection)
         {
             if (!selection) return;
             if (selected)
@@ -295,7 +297,7 @@ namespace Telescopes
         {
             if (selected)
             {
-                TelescopingSegment segment = selected.containingSegment;
+                TelescopeSegment segment = selected.containingSegment;
                 List<TelescopeParameters> allParams = segment.getParamList();
                 TelescopeUtils.growChainToFit(allParams);
                 segment.MakeAllShells(allParams);
@@ -308,7 +310,7 @@ namespace Telescopes
         {
             if (selected)
             {
-                TelescopingSegment segment = selected.containingSegment;
+                TelescopeSegment segment = selected.containingSegment;
                 List<TelescopeParameters> allParams = segment.getParamList();
                 TelescopeUtils.growChainToFit(allParams, shrinkFit: true);
                 segment.MakeAllShells(allParams);
@@ -323,13 +325,13 @@ namespace Telescopes
             {
                 if (selected.IsTerminal())
                 {
-                    TelescopingSegment segment = selected.containingSegment;
+                    TelescopeSegment segment = selected.containingSegment;
 
                     TelescopeParameters parentParams = selected.getParameters();
                     TelescopeParameters childParams = parentParams + segment.DefaultChildDiff;
                     if (childParams.radius < childParams.thickness || childParams.length < childParams.thickness) return;
 
-                    TelescopingShell childShell = segment.addChildShell(selected, parentParams, childParams, 0, true);
+                    TelescopeShell childShell = segment.addChildShell(selected, parentParams, childParams, null, true);
                     childShell.extendToRatio(1f, 2f);
                     SelectShell(childShell);
                 }

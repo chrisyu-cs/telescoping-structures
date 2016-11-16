@@ -227,7 +227,8 @@ namespace Telescopes
 
         void ReconstructAndAlign()
         {
-            Vector3 currentEnd = ReconstructFromAngles();
+            ReconstructFromAngles();
+            //Vector3 currentEnd = ReconstructFromAngles();
 
             /*
             Vector3 currentDir = (currentEnd - StartingPoint).normalized;
@@ -416,6 +417,10 @@ namespace Telescopes
             }
         }
 
+        void FixTorsionValues()
+        {
+
+        }
 
         // Update is called once per frame
         void Update()

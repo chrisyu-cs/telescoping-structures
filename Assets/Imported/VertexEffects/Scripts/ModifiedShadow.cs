@@ -5,10 +5,11 @@ using System.Collections.Generic;
 /// <summary>
 /// The behaviour of this class is almost the same as the original except:
 /// 1. It absorbs version differences.
-/// 2. It corrects the calculation of vertex list capacity.
+/// 2. It corrects the calculation of vertex list capacity (Unity 5.3 or older).
 /// </summary>
 public class ModifiedShadow : Shadow
 {
+#if !UNITY_5_4_OR_NEWER
     protected new void ApplyShadow(List<UIVertex> verts, Color32 color, int start, int end, float x, float y)
     {
         UIVertex vt;
@@ -34,6 +35,7 @@ public class ModifiedShadow : Shadow
             verts[i] = vt;
         }
     }
+#endif
 
 #if UNITY_5_2 && !UNITY_5_2_1pX
     public override void ModifyMesh(Mesh mesh)
@@ -50,7 +52,7 @@ public class ModifiedShadow : Shadow
 #endif
 
 #if !(UNITY_4_6 || UNITY_4_7 || UNITY_5_0 || UNITY_5_1)
-#if UNITY_5_2_1pX || UNITY_5_3
+#if UNITY_5_2_1pX || UNITY_5_3_OR_NEWER
     public override void ModifyMesh(VertexHelper vh)
 #else
     public void ModifyMesh(VertexHelper vh)
@@ -58,16 +60,17 @@ public class ModifiedShadow : Shadow
     {
         if (!this.IsActive())
             return;
-        
-        List<UIVertex> list = new List<UIVertex>();
+
+        var list = ListPool<UIVertex>.Get();
         vh.GetUIVertexStream(list);
-        
+
         ModifyVertices(list);
 
-#if UNITY_5_2_1pX || UNITY_5_3
+#if UNITY_5_2_1pX || UNITY_5_3_OR_NEWER
         vh.Clear();
 #endif
         vh.AddUIVertexTriangleStream(list);
+        ListPool<UIVertex>.Release(list);
     }
 
     public virtual void ModifyVertices(List<UIVertex> verts)

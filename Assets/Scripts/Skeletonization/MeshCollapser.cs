@@ -73,7 +73,6 @@ namespace Telescopes
 
         EdgePair ShortestEdgeOfTriangle(Triangle tri)
         {
-            Vector3 e1 = mesh.vertices[tri.v2] - mesh.vertices[tri.v1];
             Vector3 e2 = mesh.vertices[tri.v3] - mesh.vertices[tri.v2];
             Vector3 e3 = mesh.vertices[tri.v1] - mesh.vertices[tri.v3];
 

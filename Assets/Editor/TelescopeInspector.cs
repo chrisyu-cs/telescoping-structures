@@ -4,14 +4,19 @@ using UnityEditor;
 
 namespace Telescopes.UI
 {
-    [CustomEditor(typeof(TelescopingSegment))]
+    [CustomEditor(typeof(TelescopeSegment))]
     public class TelescopeInspector : Editor
     {
         List<bool> foldouts;
 
         void OnEnable()
         {
-            TelescopingSegment ts = (TelescopingSegment)target;
+            TelescopeSegment ts = (TelescopeSegment)target;
+
+            if (foldouts == null)
+            {
+                foldouts = new List<bool>();
+            }
 
             if (ts.parameters == null)
             {
@@ -31,20 +36,16 @@ namespace Telescopes.UI
                     foldouts.Add(false);
                 }
             }
-            if (foldouts == null)
-            {
-                foldouts = new List<bool>();
 
-                foreach (TelescopeParameters tp in ts.parameters)
-                {
-                    foldouts.Add(true);
-                }
+            foreach (TelescopeParameters tp in ts.parameters)
+            {
+                foldouts.Add(true);
             }
         }
 
         public override void OnInspectorGUI()
         {
-            TelescopingSegment ts = (TelescopingSegment)target;
+            TelescopeSegment ts = (TelescopeSegment)target;
 
             ts.material = (Material)EditorGUILayout.ObjectField("Material", ts.material, typeof(Material), false);
             ts.fountainPrefab = (GameObject)EditorGUILayout.ObjectField("Fountain Prefab", ts.fountainPrefab, typeof(GameObject), false);

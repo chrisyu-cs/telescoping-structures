@@ -582,7 +582,7 @@ namespace Telescopes
             // Split up the curve -- determine curvature values for each piece
             foreach (KMeansCenter center in centers)
             {
-                foreach (int i in center.assignedPoints)
+                for (int i = 0; i < center.assignedPoints.Count; i++)
                 {
                     segmentedCurvatures.Add(center.curvature);
                 }
@@ -889,7 +889,7 @@ namespace Telescopes
             }
 
             // Add regularizer to favor small impulses
-            double EPSILON = 0.01;
+            double EPSILON = 0.1;
 
             for (int i = 1; i < sigma.Count; i++)
             {
@@ -904,12 +904,13 @@ namespace Telescopes
             model.Optimize();
             // ====================== END LP ======================= //
 
+            /*
             for (int i = 0; i < absDiffsMinus.Count; i++)
             {
                 double min = System.Math.Min(absDiffsMinus[i].Get(GRB.DoubleAttr.X),
                     absDiffsPlus[i].Get(GRB.DoubleAttr.X));
-                //if (min > 1e-8) throw new System.Exception("ERROR: Absolute value was not zero");
-            }
+                if (min > 1e-8) throw new System.Exception("ERROR: Absolute value was not zero");
+            }*/
 
             // Read out the recommended constant torsion
             float constTorsion = (float)slope.Get(GRB.DoubleAttr.X);
@@ -937,7 +938,7 @@ namespace Telescopes
                 // Debug.Log("Impulse " + i + " = " + diff);
                 impulses.Add((float)diff);
             }
-            double averageImpulse = sumImpulses / impulses.Count;
+            //double averageImpulse = sumImpulses / impulses.Count;
 
             Debug.Log(numNonzeroImpulses + " non-zero impulses (sparse QP)");
 
@@ -1050,8 +1051,6 @@ namespace Telescopes
 
             List<double> integralsPhi = new List<double>();
             List<double> integralsXPhi = new List<double>();
-
-            TwistFunction T = (i => discretizedPoints[i].cumulativeTwist);
 
             for (int i = 0; i < arcPoints.Count - 1; i++)
             {

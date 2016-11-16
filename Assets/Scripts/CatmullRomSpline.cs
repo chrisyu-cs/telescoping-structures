@@ -211,6 +211,29 @@ namespace Telescopes
             }
         }
 
+        Vector3 StartEndpointCC(float angleOffset)
+        {
+            Vector3 circumBegin = TelescopeUtils.Circumcenter(points[1], points[2], points[3]);
+            Vector3 normalBegin = Vector3.Cross(points[2] - points[1], points[3] - points[1]);
+            Vector3 beginOffset = points[1] - circumBegin;
+
+            Vector3 rotatedBegin = Quaternion.AngleAxis(-angleOffset, normalBegin) * beginOffset + circumBegin;
+            //Vector3 diffBegin = (rotatedBegin - points[1]).normalized * 0.1f;
+            return rotatedBegin;
+        }
+        
+        Vector3 EndEndpointCC(float angleOffset)
+        {
+            int last = points.Count - 1;
+            Vector3 circumEnd = TelescopeUtils.Circumcenter(points[last - 1], points[last - 2], points[last - 3]);
+            Vector3 normalEnd = Vector3.Cross(points[last - 2] - points[last - 1], points[last - 3] - points[last - 1]);
+            Vector3 endOffset = points[last - 1] - circumEnd;
+
+            Vector3 rotatedEnd = Quaternion.AngleAxis(-angleOffset, normalEnd) * endOffset + circumEnd;
+            //Vector3 diffEnd = (rotatedEnd - points[last - 1]).normalized * 0.1f;
+            return rotatedEnd;
+        }
+
         void MoveEndpoints()
         {
             if (points.Count < 4) return;
@@ -227,23 +250,13 @@ namespace Telescopes
             {
                 if (!StartBulb)
                 {
-                    Vector3 circumBegin = TelescopeUtils.Circumcenter(points[1], points[2], points[3]);
-                    Vector3 normalBegin = Vector3.Cross(points[2] - points[1], points[3] - points[1]);
-                    Vector3 beginOffset = points[1] - circumBegin;
-                    Vector3 rotatedBegin = Quaternion.AngleAxis(-5, normalBegin) * beginOffset + circumBegin;
-                    Vector3 diffBegin = (rotatedBegin - points[1]).normalized * 0.1f;
-                    points[0] = points[1] + diffBegin;
+                    points[0] = StartEndpointCC(5);
                 }
                 
                 if (!EndBulb)
                 {
                     int last = points.Count - 1;
-                    Vector3 circumEnd = TelescopeUtils.Circumcenter(points[last - 1], points[last - 2], points[last - 3]);
-                    Vector3 normalEnd = Vector3.Cross(points[last - 2] - points[last - 1], points[last - 3] - points[last - 1]);
-                    Vector3 endOffset = points[last - 1] - circumEnd;
-                    Vector3 rotatedEnd = Quaternion.AngleAxis(-5, normalEnd) * endOffset + circumEnd;
-                    Vector3 diffEnd = (rotatedEnd - points[last - 1]).normalized * 0.1f;
-                    points[last] = points[last - 1] + diffEnd;
+                    points[last] = EndEndpointCC(5);
                 }
             }
 
@@ -256,8 +269,6 @@ namespace Telescopes
 
         public void UpdatePosition(int index, Vector3 newPosition)
         {
-            Vector3 offset = newPosition - points[index];
-
             points[index] = newPosition;
             MoveEndpoints();
             FixSegmentsAroundIndex(index);
@@ -325,11 +336,12 @@ namespace Telescopes
                 spheres.Add(draggable);
             }
 
+            /*
             if (spheres.Count >= 4)
             {
                 spheres[0].gameObject.SetActive(false);
                 spheres[spheres.Count - 1].gameObject.SetActive(false);
-            }
+            } */
         }
 
         public Vector3 sample(float t)
@@ -500,13 +512,31 @@ namespace Telescopes
             {
                 if (StartBulb)
                 {
-                    spheres[1].FollowBulb(StartBulb, StartTangent());
-                    spheres[0].Move(StartBulb.transform.position);
+                    if (points.Count == 4)
+                    {
+                        spheres[1].FollowBulb(StartBulb, StartTangent());
+                        spheres[0].Move(StartBulb.transform.position);
+                    }
+                    else
+                    {
+                        Vector3 currentTangent = spheres[1].transform.position - StartBulb.transform.position;
+                        spheres[1].FollowBulb(StartBulb, currentTangent.normalized);
+                        spheres[0].Move(StartEndpointCC(1));
+                    }
                 }
                 if (EndBulb)
                 {
-                    spheres[spheres.Count - 2].FollowBulb(EndBulb, -EndTangent());
-                    spheres[spheres.Count - 1].Move(EndBulb.transform.position);
+                    if (points.Count == 4)
+                    {
+                        spheres[spheres.Count - 2].FollowBulb(EndBulb, -EndTangent());
+                        spheres[spheres.Count - 1].Move(EndBulb.transform.position);
+                    }
+                    else
+                    {
+                        Vector3 currentTangent = spheres[spheres.Count - 2].transform.position - EndBulb.transform.position;
+                        spheres[spheres.Count - 2].FollowBulb(EndBulb, currentTangent.normalized);
+                        spheres[spheres.Count - 1].Move(EndEndpointCC(1));
+                    }
                 }
             }
         }

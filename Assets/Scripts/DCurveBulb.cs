@@ -75,7 +75,6 @@ namespace Telescopes
 
                 Vector3 newPosition = parentCurve.EndPosition;
                 Vector3 newCenter = newPosition + (radius * newTangent);
-                Vector3 translationBetween = newCenter - transform.position;
 
                 transform.position = newCenter;
                 transform.rotation = rotationBetween * transform.rotation;
