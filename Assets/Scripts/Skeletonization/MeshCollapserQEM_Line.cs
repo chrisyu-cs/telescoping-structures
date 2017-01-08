@@ -235,10 +235,12 @@ namespace Telescopes
             CatmullRomSpline crs = lineObj.AddComponent<CatmullRomSpline>();
             crs.points = new List<Vector3>();
             Vector3 firstDiff = points[1] - points[0];
-            Vector3 first = points[0] - 0.01f * firstDiff.normalized;
+            Vector3 first = points[0];
+            points[0] += firstDiff.normalized * 0.1f;
 
             Vector3 lastDiff = points[points.Length - 2] - points[points.Length - 1];
-            Vector3 last = points[points.Length - 1] - 0.01f * lastDiff.normalized;
+            Vector3 last = points[points.Length - 1];
+            points[points.Length - 1] += lastDiff.normalized * 0.1f;
 
             crs.points.Add(first);
             crs.points.AddRange(points);

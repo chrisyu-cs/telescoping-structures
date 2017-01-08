@@ -784,6 +784,177 @@ namespace Telescopes
             return results;
         }
 
+        public TorsionImpulseCurve SolveImpulsesVariableQP(List<float> arcPoints)
+        {
+            // ====================== BEGIN LP ======================= //
+            GRBEnv env = new GRBEnv("impulseQP.log");
+            GRBModel model = new GRBModel(env);
+
+            List<GRBVar> slopes = new List<GRBVar>();
+            List<GRBVar> sigma = new List<GRBVar>();
+
+            // Make the variables for torsion impulses.
+            // We use the cumulative torsion values at each separating point as the variables,
+            // because this simplifies computing the error functions later.
+            for (int i = 1; i < arcPoints.Count - 1; i++)
+            {
+                GRBVar v = model.AddVar(Constants.QP_LOWER_BOUND, Constants.QP_UPPER_BOUND,
+                    0, GRB.CONTINUOUS, "sigma" + i);
+                sigma.Add(v);
+            }
+
+            // Make the variables for per-segment slopes.
+            for (int i = 0; i < arcPoints.Count - 1; i++)
+            {
+                GRBVar v = model.AddVar(Constants.QP_LOWER_BOUND, Constants.QP_UPPER_BOUND,
+                    0, GRB.CONTINUOUS, "slope" + i);
+                slopes.Add(v);
+            }
+
+            List<GRBVar> absDiffsPlus = new List<GRBVar>();
+            List<GRBVar> absDiffsMinus = new List<GRBVar>();
+
+            // Made variables that will represent absolute values of diffs.
+            for (int i = 0; i < sigma.Count; i++)
+            {
+                GRBVar vPlus = model.AddVar(0, Constants.QP_UPPER_BOUND,
+                    0, GRB.CONTINUOUS, "diff" + i + "+");
+                GRBVar vMinus = model.AddVar(0, Constants.QP_UPPER_BOUND,
+                    0, GRB.CONTINUOUS, "diff" + i + "-");
+                absDiffsPlus.Add(vPlus);
+                absDiffsMinus.Add(vMinus);
+            }
+
+            model.Update();
+
+            // Add constraints that will define the plus and minus vars
+            // as absolute values.
+            for (int i = 0; i < absDiffsMinus.Count; i++)
+            {
+                GRBVar vPlus = absDiffsPlus[i];
+                GRBVar vMinus = absDiffsMinus[i];
+                GRBLinExpr expectedTwist;
+                float segLength = arcPoints[i + 1] - arcPoints[i];
+
+                // If we're at impulse point 0, then slope 0 is on the segment
+                // immediately before point 0. So in general, at impulse point i
+                // in this list, we need to add slope i to the cumulative value (i-1).
+
+                if (i == 0) expectedTwist = slopes[0] * segLength;
+                else expectedTwist = sigma[i - 1] + slopes[i] * segLength;
+                GRBLinExpr diff = sigma[i] - expectedTwist;
+
+                GRBTempConstr tempConstr = (diff == vPlus - vMinus);
+                model.AddConstr(tempConstr, "diffConstr" + i);
+            }
+
+            GRBQuadExpr objective = 0;
+            float cumulativeTwist = 0;
+
+            // Add least squares error component.
+            // This is the sum of all squared differences
+            // between our data points and the reconstructed function.
+            for (int i = 0; i < discretizedPoints.Count; i++)
+            {
+                cumulativeTwist += Mathf.Deg2Rad * discretizedPoints[i].twistingAngle;
+                float arcPosition = (i + 1) * segmentLength;
+
+                // Find the last arc point that comes before the sample point
+                int stepNum = 0;
+                for (int j = 0; j < arcPoints.Count; j++)
+                {
+                    if (arcPoints[j] > arcPosition) break;
+                    stepNum = j;
+                }
+                // Find the distance past the most recent impulse point.
+                float arcDistanceFromPt = arcPosition - arcPoints[stepNum];
+                // Implicitly sigma_0 = 0, so the error contribution here
+                // is just the difference from the segments starting at 0.
+                GRBQuadExpr error;
+                GRBLinExpr sigma_slope;
+                if (stepNum == 0)
+                {
+                    sigma_slope = 0 + slopes[0] * arcDistanceFromPt;
+                }
+                // Otherwise we use sigma_j as the starting point.
+                else
+                {
+                    // We didn't include sigma_0 in the list, 
+                    // so actually sigma_1 = sigma[0].
+                    // The slope immediately after point j is slope j + 1.
+                    int j = stepNum - 1;
+
+                    sigma_slope = sigma[j] + slopes[j + 1] * arcDistanceFromPt;
+
+                }
+                error = (cumulativeTwist - sigma_slope) * (cumulativeTwist - sigma_slope);
+                objective.Add(error);
+            }
+
+            // Add L1 terms to encourage sparsity if enabled
+            if (DesignerController.instance.UseSparseSolve)
+            {
+                for (int i = 0; i < absDiffsMinus.Count; i++)
+                {
+                    objective.AddTerm(1, absDiffsMinus[i]);
+                    objective.AddTerm(1, absDiffsPlus[i]);
+                }
+            }
+
+            // Add regularizer to favor small impulses
+            double IMPULSE_EPSILON = 0.1;
+            for (int i = 1; i < sigma.Count; i++)
+            {
+                double arcStep = arcPoints[i + 1] - arcPoints[i];
+                GRBLinExpr expectedI = sigma[i - 1] + arcStep * slopes[i];
+                GRBLinExpr impulse = sigma[i] - expectedI;
+
+                objective.Add(IMPULSE_EPSILON * impulse * impulse);
+            }
+
+            // Add another regularizer to favor small changes in slope
+            double SLOPE_EPSILON = 2;
+            for (int i = 1; i < slopes.Count; i++)
+            {
+                GRBLinExpr slopeDiff = slopes[i] - slopes[i - 1];
+                objective.Add(SLOPE_EPSILON * slopeDiff * slopeDiff);
+            }
+
+            model.SetObjective(objective);
+            model.Optimize();
+
+            List<float> torsions = new List<float>();
+            for (int i = 0; i < slopes.Count; i++)
+            {
+                double slope = slopes[i].Get(GRB.DoubleAttr.X);
+                Debug.Log("Slope " + i + " = " + slope);
+                torsions.Add((float)slope);
+            }
+
+            List<float> impulses = new List<float>();
+            impulses.Add(0);
+            double expectedInitial = arcPoints[1] * slopes[0].Get(GRB.DoubleAttr.X);
+            double initDiff = sigma[0].Get(GRB.DoubleAttr.X) - expectedInitial;
+            impulses.Add((float)initDiff);
+
+            Debug.Log("Cumulative torsion 0 = 0");
+            for (int i = 1; i < sigma.Count; i++)
+            {
+                double arcStep = arcPoints[i + 1] - arcPoints[i];
+                double expectedI = sigma[i - 1].Get(GRB.DoubleAttr.X) + arcStep * slopes[i].Get(GRB.DoubleAttr.X);
+                double actualI = sigma[i].Get(GRB.DoubleAttr.X);
+                double impulse = actualI - expectedI;
+                impulses.Add((float)impulse);
+            }
+
+            List<float> curvatures = new List<float>();
+            curvatures.Add(AverageCurvature());
+
+            var curve = MakeTorsionImpulseCurve(impulses, arcPoints, curvatures, torsions);
+            curve.SetColor(Color.red);
+            return curve;
+        }
+
         public TorsionImpulseCurve SolveImpulsesQP(List<float> arcPoints)
         {
             // ====================== BEGIN LP ======================= //
@@ -939,8 +1110,6 @@ namespace Telescopes
                 impulses.Add((float)diff);
             }
             //double averageImpulse = sumImpulses / impulses.Count;
-
-            Debug.Log(numNonzeroImpulses + " non-zero impulses (sparse QP)");
 
             var t = MakeTorsionImpulseCurve(impulses, arcPoints, constTorsion);
             t.SetColor(Color.cyan);

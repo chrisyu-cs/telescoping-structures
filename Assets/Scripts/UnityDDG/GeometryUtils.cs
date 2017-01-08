@@ -56,18 +56,29 @@ namespace UnityDDG
                 ptIndex++;
             }
 
+            List<Vector3> separateVerts = new List<Vector3>();
+            int vertCount = 0;
+
             // Extract list of faces
             foreach (var f in hull.Faces)
             {
-                for (int i = 0; i < 3; i++)
-                {
-                    int index = pointDict[f.Vertices[i]];
-                    hullFaces.Add(index);
-                }
+                int v1 = vertCount++;
+                int v2 = vertCount++;
+                int v3 = vertCount++;
+
+                hullFaces.Add(v1);
+                hullFaces.Add(v2);
+                hullFaces.Add(v3);
+
+                separateVerts.Add(Vector3OfVert(f.Vertices[0]));
+                separateVerts.Add(Vector3OfVert(f.Vertices[1]));
+                separateVerts.Add(Vector3OfVert(f.Vertices[2]));
+                //int index = pointDict[f.Vertices[i]];
+                //hullFaces.Add(index);
             }
 
             Mesh m = new Mesh();
-            m.vertices = hullVerts.ToArray();
+            m.vertices = separateVerts.ToArray();
             m.triangles = hullFaces.ToArray();
             m.RecalculateNormals();
 

@@ -6,22 +6,29 @@ namespace Telescopes
     public class CameraControl : MonoBehaviour
     {
         bool locked;
-        private float theta, phi;
+        public float theta, phi;
         public float translateSpeed = 2f;
         public float rotateSpeed = 2f;
 
-        private Rigidbody rb;
-        
+        public ControlMode mode;
+
+        public float InterpRate = 0.2f;
+        public float LookRadius;
+        public Transform LookTarget;
+
+        private int screenshotNum = 0;
+
         // Use this for initialization
         void Start()
         {
             locked = false;
-            theta = 0;
-            phi = 0;
-            rb = GetComponent<Rigidbody>();
+            theta = transform.rotation.eulerAngles.y;
+            phi = transform.rotation.eulerAngles.x;
+
+            mode = ControlMode.FreeMove;
         }
 
-        void ProcessMove()
+        void ProcessFreeMove()
         {
             float up = Input.GetAxis("Vertical");
             float right = Input.GetAxis("Horizontal");
@@ -43,10 +50,58 @@ namespace Telescopes
             transform.rotation = Quaternion.Euler(phi, theta, 0);
         }
 
+        void ProcessLookAtTarget()
+        {
+            Vector3 toTarget = LookTarget.position - transform.position;
+
+            Vector3 lookPosition = LookTarget.position - (toTarget.normalized * LookRadius);
+            Quaternion lookRotation = Quaternion.LookRotation(toTarget, Vector3.up);
+            transform.position = Vector3.Lerp(transform.position, lookPosition, InterpRate);
+            transform.rotation = Quaternion.Slerp(transform.rotation, lookRotation, InterpRate);
+
+            phi = transform.rotation.eulerAngles.x;
+            theta = transform.rotation.eulerAngles.y;
+        }
+
+        public void FreeMove()
+        {
+            phi =  transform.rotation.eulerAngles.x;
+            if (phi > 180) phi -= 360;
+            theta = transform.rotation.eulerAngles.y;
+
+            mode = ControlMode.FreeMove;
+        }
+
+        public void LookAtTarget(Transform target, float radius)
+        {
+            LookTarget = target;
+            LookRadius = radius;
+            mode = ControlMode.LookAtTarget;
+        }
+
         // Update is called once per frame
         void Update()
         {
-            ProcessMove();
+            if (mode == ControlMode.FreeMove)
+            {
+                ProcessFreeMove();
+            }
+            else if (LookTarget && mode == ControlMode.LookAtTarget)
+            {
+                ProcessLookAtTarget();
+            }
+
+            if (Input.GetKeyDown("f12"))
+            {
+                Application.CaptureScreenshot("Pictures/screenshot" + screenshotNum + ".png");
+                screenshotNum++;
+                Debug.Log("Screenshot saved");
+            }
+        }
+
+        public enum ControlMode
+        {
+            FreeMove, LookAtTarget
         }
     }
 }

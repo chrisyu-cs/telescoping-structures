@@ -10,41 +10,82 @@ namespace Telescopes
     {
         public delegate Vector3 VectorTransform(Vector3 v);
 
-        public static void WriteSTLOfHierarchy(TelescopeElement rootElement, string filename)
+        public static void WriteSCADOfStructure(List<string> junctureScads, List<string> shellSTLs)
         {
 
         }
 
-        public static void WriteSTLOfSegment(TelescopeSegment segment, string filename)
+        public static void WriteSCADOfJunctureSTLs(string bulbSTL,
+            List<string> unionSTLs,
+            List<string> diffSTLs, string filename)
         {
-            Debug.Log("Write STL to " + filename);
+            Debug.Log("Write scad to " + filename);
 
-            segment.transform.position = Vector3.zero;
-            segment.shells[0].transform.rotation = Quaternion.identity;
-            segment.ExtendImmediate(0);
-            List<string> allLines = new List<string>();
-            allLines.Add("solid " + segment.name);
+            using (StreamWriter file = new StreamWriter(filename))
+            {
+                file.WriteLine("union() {");
 
-            float minX = 0, minY = 0, minZ = 0;
+                if (bulbSTL.Length > 0)
+                {
+                    file.WriteLine("    difference() {");
+                    file.WriteLine("        import(\"" + bulbSTL + "\", convexity=10);");
+                    foreach (string subtractSTL in diffSTLs)
+                    {
+                        file.WriteLine("        import(\"" + subtractSTL + "\", convexity=10);");
+                    }
+                    file.WriteLine("    }");
+                }
+                else
+                {
+                    Debug.Log("Bulb stl is empty, not writing difference objects");
+                }
+                
+                foreach (string addSTL in unionSTLs)
+                {
+                    file.WriteLine("    import(\"" + addSTL + "\", convexity=10);");
+                }
+
+                file.WriteLine("}");
+            }
+        }
+
+        public static List<string> WriteSTLOfShells(TelescopeSegment segment, Vector3 minOffset)
+        {
+            List<string> stlNames = new List<string>();
 
             foreach (TelescopeShell shell in segment.shells)
             {
-                VectorTransform WorldSpace = (v => shell.transform.rotation * v + shell.transform.position);
-
-                foreach (Vector3 v in shell.mesh.vertices)
+                string stl = "stls/" + shell.name + ".stl";
+                using (StreamWriter file = new StreamWriter("scad/" + stl))
                 {
-                    minX = Mathf.Min(minX, WorldSpace(v).x);
-                    minY = Mathf.Min(minY, WorldSpace(v).y);
-                    minZ = Mathf.Min(minZ, WorldSpace(v).z);
-                }
-            }
+                    VectorTransform ShellTransform = (v =>
+                        shell.transform.rotation * v + shell.transform.position - minOffset);
 
-            Vector3 stlOffset = new Vector3(-minX, -minY, -minZ);
+                    List<string> shellLines = FacetsOfMesh(shell.mesh, ShellTransform);
+
+                    file.WriteLine("solid " + shell.name);
+                    foreach (string line in shellLines)
+                    {
+                        file.WriteLine(line);
+                    }
+                    file.WriteLine("endsolid");
+                }
+                stlNames.Add(stl);
+            }
+            return stlNames;
+        }
+
+        public static void WriteSTLOfSegment(TelescopeSegment segment, Vector3 minOffset, string filename)
+        {
+            Debug.Log("Write STL to " + filename);
+            
+            List<string> allLines = new List<string>();
+            allLines.Add("solid " + segment.name);
             
             foreach (TelescopeShell shell in segment.shells)
             {
                 VectorTransform ShellTransform = (v =>
-                    shell.transform.rotation * v + shell.transform.position + stlOffset);
+                    shell.transform.rotation * v + shell.transform.position - minOffset);
 
                 List<string> shellLines = FacetsOfMesh(shell.mesh, ShellTransform); 
                 allLines.AddRange(shellLines);
@@ -69,7 +110,7 @@ namespace Telescopes
         public static List<string> STLOfMesh(Mesh m)
         {
             Bounds b = m.bounds;
-            VectorTransform f = (v => v - (1.001f * b.min));
+            VectorTransform f = (v => v - b.min);
 
             return STLOfMesh(m, f);
         }

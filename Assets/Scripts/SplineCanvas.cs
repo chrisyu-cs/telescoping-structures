@@ -25,6 +25,8 @@ namespace Telescopes
 
         CanvasStage stage;
 
+        public TelescopeStructure ActiveStructure;
+
         // Use this for initialization
         void Start()
         {
@@ -189,6 +191,11 @@ namespace Telescopes
             splines.Remove(crs);
         }
 
+        float FindStartRadius(float endRadius, float arcLength, int numShells)
+        {
+            return endRadius + numShells * Constants.WALL_THICKNESS + arcLength * Constants.TAPER_SLOPE;
+        }
+
         /// <summary>
         /// Determines whether or not the given point is inside of a bulb.
         /// If so, returns the bulb that the point is contained inside.
@@ -199,9 +206,12 @@ namespace Telescopes
         {
             foreach (DraggablePoint bulb in bulbs)
             {
-                Vector3 center = bulb.transform.position;
-                float distance = Vector3.Distance(point, center);
-                if (distance <= bulb.radius) return bulb;
+                if (bulb.Type == PointType.Bulb)
+                {
+                    Vector3 center = bulb.transform.position;
+                    float distance = Vector3.Distance(point, center);
+                    if (distance <= bulb.radius) return bulb;
+                }
             }
             return null;
         }
@@ -300,7 +310,7 @@ namespace Telescopes
 
                     foreach (DiscreteCurve dc in dCurves)
                     {
-                        TorsionImpulseCurve impulseCurve = dc.MakeCurve();
+                        TorsionImpulseCurve impulseCurve = dc.MakeImpulseCurve();
                         tiCurves.Add(impulseCurve);
                         impulseCurve.transform.parent = transform;
 
@@ -342,14 +352,22 @@ namespace Telescopes
             {
                 if (Input.GetKey("left shift") && Input.GetKeyDown("i"))
                 {
+                    // Create a telescope structure empty object
+                    GameObject structureObj = new GameObject();
+                    structureObj.name = "TelescopingStructure";
+                    TelescopeStructure structure = structureObj.AddComponent<TelescopeStructure>();
+                    structure.transform.parent = transform;
+                    
                     // Create dictionary to record created telescope junctures
                     Dictionary<DCurveBulb, TelescopeJuncture> bulbDict = new Dictionary<DCurveBulb, TelescopeJuncture>();
 
                     // Create all of the junctures, and hash the original abstract intersections to them
                     foreach (DCurveBulb dcb in tiBulbs)
                     {
-                        TelescopeJuncture junct = TelescopeJuncture.CreateJuncture(dcb.transform.position);
+                        TelescopeJuncture junct = TelescopeJuncture.CreateJuncture(dcb.transform.position, dcb.radius * Mathf.Sqrt(2));
                         bulbDict.Add(dcb, junct);
+                        structure.junctures.Add(junct);
+                        junct.transform.parent = structure.transform;
                     }
 
                     // Now we need to loop over all telescope segments,
@@ -357,7 +375,7 @@ namespace Telescopes
                     foreach (TorsionImpulseCurve tic in tiCurves)
                     {
                         // Set radius to match the radii at endpoints
-                        float startRadius = tic.NumSegments * Constants.DEFAULT_WALL_THICKNESS + 0.2f
+                        float startRadius = tic.NumSegments * Constants.WALL_THICKNESS + 0.2f
                             + (tic.ArcLength * Constants.TAPER_SLOPE);
 
                         TelescopeSegment seg;
@@ -369,12 +387,14 @@ namespace Telescopes
                         {
                             if (tic.EndJuncture.radius > tic.StartJuncture.radius)
                             {
-                                startRadius = tic.EndJuncture.radius;
+                                //startRadius = tic.EndJuncture.radius;
+                                startRadius = FindStartRadius(tic.StartJuncture.radius, tic.ArcLength, tic.NumSegments);
                                 seg = tic.MakeTelescope(startRadius, reverse: true);
                             }
                             else
                             {
-                                startRadius = tic.StartJuncture.radius;
+                                //startRadius = tic.StartJuncture.radius;
+                                startRadius = FindStartRadius(tic.EndJuncture.radius, tic.ArcLength, tic.NumSegments);
                                 seg = tic.MakeTelescope(startRadius);
                             }
                         }
@@ -392,6 +412,9 @@ namespace Telescopes
                         {
                             seg = tic.MakeTelescope(startRadius);
                         }
+
+                        seg.transform.parent = structure.transform;
+                        structure.segments.Add(seg);
 
                         seg.ExtendImmediate(1);
 
@@ -425,7 +448,16 @@ namespace Telescopes
                         }
                     }
 
+                    ActiveStructure = structure;
                     stage = CanvasStage.Telescope;
+                }
+            }
+
+            else if (stage == CanvasStage.Telescope)
+            {
+                if (Input.GetKey("left shift") && Input.GetKeyDown("enter") && ActiveStructure)
+                {
+                    ActiveStructure.GenerateSCAD();
                 }
             }
         }
@@ -490,6 +522,8 @@ namespace Telescopes
                 DraggablePoint pt = AddBulb(bData.position.GetVector());
                 pt.SetSize(bData.radius);
                 pt.containingCanvas = this;
+                if (bData.type == PointType.Spline) pt.SwitchBulbType(PointType.Bulb);
+                else pt.SwitchBulbType(bData.type);
             }
 
             foreach (SplineData sData in data.splines)

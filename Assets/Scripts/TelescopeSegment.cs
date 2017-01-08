@@ -39,7 +39,7 @@ namespace Telescopes
         {
             get
             {
-                return Constants.DEFAULT_WALL_THICKNESS;
+                return Constants.WALL_THICKNESS;
             }
         }
 
@@ -95,6 +95,68 @@ namespace Telescopes
             }
         }
 
+        public Vector3 WorldSpaceMin
+        {
+            get
+            {
+                Vector3 minBounds = shells[0].WorldSpaceBounds.min;
+                foreach (TelescopeShell shell in shells)
+                {
+                    minBounds = TelescopeUtils.VectorMin(minBounds, shell.WorldSpaceBounds.min);
+                }
+
+                return minBounds;
+            }
+        }
+
+        public float InnermostRadius
+        {
+            get
+            {
+                TelescopeShell inner = (Reversed) ? FirstShell : LastShell;
+                return inner.radius;
+            }
+        }
+
+        public float OutermostRadius
+        {
+            get
+            {
+                TelescopeShell outer = (Reversed) ? LastShell : FirstShell;
+                return outer.radius;
+            }
+        }
+
+        public float OutermostHeight
+        {
+            get
+            {
+                TelescopeShell outer = (Reversed) ? LastShell : FirstShell;
+                return outer.length;
+            }
+        }
+
+        public Vector3 BasePointOnSurface
+        {
+            get
+            {
+                TelescopeShell shell = (Reversed) ? LastShell : FirstShell;
+                List<Vector3> baseRing = shell.BottomRing;
+
+                int i = Constants.VERTS_PER_CIRCLE / 4;
+                return shell.transform.rotation * baseRing[i] + shell.transform.position;
+            }
+        }
+
+        public Vector3 BasePointAtCenter
+        {
+            get
+            {
+                TelescopeShell shell = (Reversed) ? LastShell : FirstShell;
+                return shell.transform.position;
+            }
+        }
+
         public TelescopeElement parent;
         public int parentElementNumber;
         public Vector3 offsetFromParent;
@@ -129,17 +191,17 @@ namespace Telescopes
 
         public TelescopeShell addChildShell(TelescopeShell parent,
             TelescopeParameters parentParams, TelescopeParameters childParams,
-            TelescopeParameters nextParams, bool doOverhang)
+            TelescopeParameters nextParams, bool isNotLast)
         {
             int i = shells.Count;
             // Make the new shell, and set the previous shell as its parent
             GameObject shellObj = new GameObject();
             shellObj.transform.parent = parent.transform;
-            shellObj.name = "shell" + i;
+            shellObj.name = name + "-shell" + i;
 
             // Make the geometry, etc.
             TelescopeShell newShell = shellObj.AddComponent<TelescopeShell>();
-            newShell.GenerateGeometry(childParams, nextParams, overhang: doOverhang);
+            newShell.GenerateGeometry(childParams, nextParams, doOverhang: true);
             newShell.setMaterial(material);
 
             // Set the shell's rest transformation relative to its parent.
@@ -189,14 +251,14 @@ namespace Telescopes
 
         public void MakeAllShells(List<TelescopeParameters> paramList, bool reversed = false)
         {
-            Debug.Log("Wall = " + Constants.DEFAULT_WALL_THICKNESS + ", slope = " + Constants.TAPER_SLOPE +
+            Debug.Log("Wall = " + Constants.WALL_THICKNESS + ", slope = " + Constants.TAPER_SLOPE +
                 ", gap = " + Constants.SHELL_GAP + ", indent = " + Constants.INDENT_RATIO);
 
             DeleteTelescope();
             
             // Create an object for the first shell
             GameObject rootShellObj = new GameObject();
-            rootShellObj.name = "shell0";
+            rootShellObj.name = name + "-shell0";
             rootShellObj.transform.parent = this.transform;
             rootShellObj.transform.localPosition = Vector3.zero;
 
@@ -209,8 +271,6 @@ namespace Telescopes
             TelescopeParameters params1 = (paramList.Count > 1) ? paramList[1] : null;
             shell.GenerateGeometry(paramList[0], params1, outerGroove: false);
             shell.setMaterial(material);
-
-            Debug.Log("shell thickness " + shell.thickness + ", param thickness " + paramList[0].thickness);
 
             // Shells don't know anything about their position/rotation,
             // so we set that here.
@@ -246,13 +306,12 @@ namespace Telescopes
                 // Get the twist impulse for the next shell, so that we can cut the grooves.
                 TelescopeParameters nextParams = (i < paramList.Count - 1) ? paramList[i + 1] : null;
 
-
                 TelescopeParameters taperedParams = (nextParams != null) ? new TelescopeParameters(nextParams) : null;
                 if (taperedParams != null) taperedParams.radius -= accumulatedTaper;
 
                 // Add it.
-                bool doOverhang = (i < paramList.Count - 1);
-                prevShell = addChildShell(prevShell, previousParams, currentParams, taperedParams, doOverhang);
+                bool isNotLast = (i < paramList.Count - 1);
+                prevShell = addChildShell(prevShell, previousParams, currentParams, taperedParams, isNotLast);
                 accumulatedTaper += prevShell.getTaperLoss();
             }
 
@@ -302,6 +361,9 @@ namespace Telescopes
             initNumShells = concreteParams.Count;
             shells = new List<TelescopeShell>();
             initialDirection.Normalize();
+
+            // Make sure that all the shells fit inside each other.
+            TelescopeUtils.growChainToFit(concreteParams);
 
             MakeShellsFromFinalList(concreteParams);
         }
@@ -391,6 +453,13 @@ namespace Telescopes
             }
         }
 
+        public void SetSmallestExtension(float t)
+        {
+            TelescopeShell shell = (Reversed) ? shells[1] : LastShell;
+            shell.extensionRatio = t;
+            shell.SetTransform();
+        }
+
         public override void ExtendImmediate(float t)
         {
             SetShellExtensions(t);
@@ -448,7 +517,6 @@ namespace Telescopes
 
         public void ReverseTelescope()
         {
-            Debug.Log("Reverse");
             Reversed = !Reversed;
             ReversedOption = !ReversedOption;
             // Extend the shell fully so that we have the correct world positions.
@@ -516,12 +584,21 @@ namespace Telescopes
                 Reversed = ReversedOption;
             }
 
+            if (Input.GetKeyDown("["))
+            {
+                List<Vector3> pts = new List<Vector3>();
+                pts.Add(BasePointAtCenter);
+                pts.Add(BasePointOnSurface);
+                TelescopeUtils.DisplayLine(pts);
+            }
             
             /*
             if (Input.GetKey("left shift") && Input.GetKeyDown("enter"))
             {
-                //STLWriter.WriteSTLOfSegment(this, name + ".stl");
+                ExtendImmediate(0);
 
+                STLWriter.WriteSTLOfSegment(this, WorldSpaceMin - new Vector3(0.01f, 0.01f, 0.01f), name + ".stl");
+                
                 Mesh volume = shells[0].GenerateInnerVolume(shells[1].getParameters(), -0.5f);
                 GameObject innerVolume = new GameObject();
                 MeshFilter mf = innerVolume.AddComponent<MeshFilter>();
@@ -540,7 +617,8 @@ namespace Telescopes
                 }
 
                 //STLWriter.WriteSTLOfMesh(shells[0].mesh, "scad/innerVolume.stl");
-            }*/
+            }
+            */
 
             if (rootSegment)
             {

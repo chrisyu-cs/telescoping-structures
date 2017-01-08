@@ -248,6 +248,7 @@ namespace Telescopes
                     }
                     else if (addOuterGroove)
                     {
+                        float shrinkFromLength = length * Constants.TAPER_SLOPE;
                         radiusOffset = (thickness - Constants.SHELL_GAP / 2) * Constants.INDENT_RATIO;
                     }
                 }
@@ -505,7 +506,8 @@ namespace Telescopes
         }
 
         CylinderMesh GenerateCylinder(TelescopeParameters tParams, float slope,
-            bool innerGroove = false, bool outerGroove = false, bool overhang = true)
+            bool innerGroove = false, bool outerGroove = false, bool overhang = true,
+            int extraRings = 0)
         {
             // We basically need to sweep a circular cross-section along a circular path.
             List<List<IndexedVertex>> circles = new List<List<IndexedVertex>>();
@@ -514,7 +516,7 @@ namespace Telescopes
 
             float radiusLoss = 0;
 
-            int numCircles = Constants.CUTS_PER_CYLINDER + (overhang ? Constants.OVERHANG_CUTS : 0);
+            int numCircles = Constants.CUTS_PER_CYLINDER + (overhang ? Constants.OVERHANG_CUTS : 0) + extraRings;
 
             // Generate vertices
             for (int i = 0; i < numCircles; i++)
@@ -545,7 +547,8 @@ namespace Telescopes
             return cm;
         }
 
-        CylinderMesh GenerateInnerCylinder(TelescopeParameters nextParams, bool overhang, float arcOffset)
+        CylinderMesh GenerateInnerCylinder(TelescopeParameters nextParams, bool overhang, float arcOffset,
+            int extraRings = 0)
         {
             TelescopeParameters ourParams = getParameters();
             CylinderMesh innerCyl;
@@ -558,7 +561,8 @@ namespace Telescopes
                 TelescopeParameters innerParams = new TelescopeParameters(nextParams.length, nextParams.radius,
                     nextParams.thickness, nextParams.curvature, nextParams.torsion, nextParams.twistFromParent);
                 innerCyl = GenerateCylinder(innerParams,
-                    Constants.TAPER_SLOPE, innerGroove: true, overhang: overhang);
+                    Constants.TAPER_SLOPE, innerGroove: true, overhang: overhang,
+                    extraRings: extraRings);
 
                 // Move and rotate the inner profile so that the end circles align.
                 Quaternion alignRotation = TelescopeUtils.childBaseRotation(ourParams, nextParams);
@@ -574,8 +578,6 @@ namespace Telescopes
 
                 innerCyl.ApplyRotation(alignRotation);
                 innerCyl.ApplyTranslation(alignTranslation);
-
-                Debug.Log("Outer radius = " + radius + ", inner radius = " + nextParams.radius);
             }
 
             else
@@ -584,7 +586,8 @@ namespace Telescopes
                     thickness, curvature, torsion, 0);
 
                 innerCyl = GenerateCylinder(innerParams,
-                    Constants.TAPER_SLOPE, innerGroove: true, overhang: overhang);
+                    Constants.TAPER_SLOPE, innerGroove: (nextParams != null), overhang: overhang,
+                    extraRings: extraRings);
 
                 if (nextParams != null)
                 {
@@ -601,14 +604,14 @@ namespace Telescopes
             return innerCyl;
         }
 
-        public Mesh GenerateInnerVolume(TelescopeParameters nextParams, float arcOffset)
+        public Mesh GenerateInnerVolume(TelescopeParameters nextParams, float arcOffset, int extraRings = 0)
         {
             currentIndex = 0;
 
             Mesh mesh = new Mesh();
 
             // Get the inner cylinder of the shell
-            CylinderMesh inner = GenerateInnerCylinder(nextParams, HasOverhang, arcOffset);
+            CylinderMesh inner = GenerateInnerCylinder(nextParams, HasOverhang, arcOffset, extraRings: extraRings);
 
             // Get the vertices
             List<IndexedVertex> verticesList = flattenList(inner.circleCuts);
@@ -641,9 +644,9 @@ namespace Telescopes
         }
 
         public void GenerateGeometry(TelescopeParameters theParams, TelescopeParameters nextParams,
-            bool overhang = true, bool outerGroove = true)
+            bool doOverhang = true, bool outerGroove = true)
         {
-            HasOverhang = overhang;
+            HasOverhang = doOverhang;
 
             this.thickness = theParams.thickness;
             this.length = theParams.length;
@@ -664,9 +667,9 @@ namespace Telescopes
 
             CylinderMesh outerCyl = GenerateCylinder(outerParams,
                 slopeCosmetic + Constants.TAPER_SLOPE,
-                outerGroove: outerGroove, overhang: overhang);
+                outerGroove: outerGroove, overhang: doOverhang);
 
-            CylinderMesh innerCyl = GenerateInnerCylinder(nextParams, overhang, 0);
+            CylinderMesh innerCyl = GenerateInnerCylinder(nextParams, doOverhang, 0);
 
             // Flatten vertex list
             List<IndexedVertex> outerVerts = flattenList(outerCyl.circleCuts);
@@ -766,6 +769,110 @@ namespace Telescopes
                 Vector3 axis = parent.transform.forward;
                 transform.RotateAround(parentWorld, axis, parent.twistAngle * twistT);
             }
+        }
+
+        /// <summary>
+        /// Get the point on the surface of this telescope shell corresponding
+        /// to moving a ratio of t along the center axis (t in [0,1]), and
+        /// rotating about the axis by the given angle.
+        /// </summary>
+        /// <param name="lengthT"></param>
+        /// <param name="angle"></param>
+        /// <returns></returns>
+        public Vector3 SurfacePointWS(float lengthT, float angle)
+        {
+            Vector3 circlePoint = new Vector3(Mathf.Cos(angle), -Mathf.Sin(angle));
+            circlePoint *= radius;
+            Vector3 localT = getLocalLocationAlongPath(lengthT);
+            Quaternion localR = getLocalRotationAlongPath(lengthT);
+            Vector3 movedPoint = localR * circlePoint + localT;
+
+            return transform.rotation * movedPoint + transform.position;
+        }
+
+        public Vector3 CenterPointWS(float lengthT)
+        {
+            Vector3 localPoint = getLocalLocationAlongPath(lengthT);
+            return transform.rotation * localPoint + transform.position;
+        }
+
+        public Vector3 CenterTangentWS(float lengthT)
+        {
+            Quaternion localR = getLocalRotationAlongPath(lengthT);
+            Vector3 movedTangent = localR * Vector3.forward;
+            return transform.rotation * movedTangent;
+        }
+
+        public bool CollidesWith(TelescopeShell otherShell, out float moveDistance, out Vector3 contactNormal)
+        {
+            float tStep = 1f / (Constants.CUTS_PER_CYLINDER - 1);
+            float angleStep = 2f * Mathf.PI / Constants.VERTS_PER_CIRCLE;
+
+            float minDistance = 1001f;
+            contactNormal = Vector3.zero;
+
+            Vector3 closestRing = Vector3.zero;
+            Vector3 closestOther = Vector3.zero;
+
+            int thisShellCuts = Constants.CUTS_PER_CYLINDER;
+            if (HasOverhang) thisShellCuts += Constants.OVERHANG_CUTS;
+
+            int otherShellCuts = Constants.CUTS_PER_CYLINDER;
+            if (otherShell.HasOverhang) otherShellCuts += Constants.OVERHANG_CUTS;
+
+            // Compare every ring on this shell against the other shell
+            for (int ring = 0; ring < thisShellCuts; ring++)
+            {
+                // Compute the normal of the plane that is orthogonal to the shell here
+                Vector3 ringNormal = CenterTangentWS(ring * tStep);
+                Vector3 ringCenter = CenterPointWS(ring * tStep);
+
+                // Need to loop over all vertices of the other shell.
+                for (int cut = 0; cut < otherShellCuts; cut++)
+                {
+                    for (int vert = -1; vert < Constants.VERTS_PER_CIRCLE; vert++)
+                    {
+                        Vector3 otherVert;
+                        // Use -1 as a hack to check the center point too
+                        if (vert == -1) otherVert = otherShell.CenterPointWS(cut * tStep);
+                        else
+                        {
+                            // Get the vertex on the surface of the other shell
+                            float otherT = cut * tStep;
+                            float otherAngle = angleStep * vert;
+                            otherVert = otherShell.SurfacePointWS(otherT, otherAngle);
+                        }
+
+                        // See if it is near the normal plane to the ring of the current shell
+                        Vector3 vecToOther = otherVert - ringCenter;
+                        float orthoDistance = Vector3.Dot(vecToOther, ringNormal);
+                        // If it is, compute the projected distance along the normal plane.
+                        // If the distance is close to being on this ring's plane, 
+                        // compare it against the old min
+                        if (Mathf.Abs(orthoDistance) < tStep * length * 2)
+                        {
+                            Vector3 planeVec = vecToOther - orthoDistance * ringNormal;
+                            float planeDist = planeVec.magnitude;
+                            if (planeDist < minDistance)
+                            {
+                                minDistance = planeDist;
+                                Vector3 otherRingCenter = otherShell.CenterPointWS(cut * tStep);
+                                contactNormal = (otherRingCenter - ringCenter).normalized;
+
+                                closestRing = ringCenter;
+                                closestOther = otherVert;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // We have now computed the minimum distance from any vertex on the
+            // other shell to any vertex on the center line of this shell.
+            // If any such distance is closer than this shell's radius, then
+            // the shells are colliding.
+            moveDistance = (radius + Constants.COLLISION_GAP - minDistance) + 0.01f;
+            return minDistance < radius + Constants.COLLISION_GAP;
         }
 
         public void WriteShell()

@@ -16,6 +16,11 @@ namespace Telescopes
         private Vector3 startingTangent;
         private Vector3 startingBinormal;
 
+        public Vector3 StartPosition
+        {
+            get { return StartingPoint; }
+        }
+
         public Vector3 LastPoint
         {
             get
@@ -40,6 +45,13 @@ namespace Telescopes
         public DCurveBulb childBulb;
 
         public SplineCanvas containingCanvas;
+
+        static int CurveNumber = 0;
+
+        public static int NextCurveNumber()
+        {
+            return CurveNumber++;
+        }
 
         // Use this for initialization
         void Start()
@@ -86,6 +98,10 @@ namespace Telescopes
                 else
                 {
                     twistAngle = TelescopeUtils.AngleBetween(prevBinormal, curvatureBinormal, previousVec);
+
+                    // If the bend angle is tiny, then the curve is basically straight, so
+                    // just set twist values to 0 to avoid unnecessary twisting.
+                    if (bendAngle <= 0.1) twistAngle = 0;
                 }
 
                 if (float.IsNaN(bendAngle)) throw new System.Exception("Bend angle is nan, dot = " + dot);
@@ -153,10 +169,10 @@ namespace Telescopes
         /// <param name="rotation"></param>
         /// <param name="bulbCenter"></param>
         /// <param name="radius"></param>
-        public void RotateAndOffset(Quaternion rotation, Vector3 bulbCenter, float radius)
+        public void RotateAndOffset(Quaternion rotation, Vector3 bulbCenter, Vector3 tangent, float radius)
         {
             Rotate(rotation);
-            StartingPoint = bulbCenter + (radius * startingTangent);
+            StartingPoint = bulbCenter + (radius * tangent);
 
             targetEndPoint = ReconstructFromAngles();
             ComputeFrenetFrames();
@@ -227,27 +243,33 @@ namespace Telescopes
 
         void ReconstructAndAlign()
         {
-            ReconstructFromAngles();
-            //Vector3 currentEnd = ReconstructFromAngles();
-
-            /*
-            Vector3 currentDir = (currentEnd - StartingPoint).normalized;
-            Vector3 targetDir = targetEndPoint - StartingPoint;
-            float targetLength = targetDir.magnitude;
-            targetDir /= targetLength;
-
-            Quaternion toTarget = Quaternion.FromToRotation(currentDir, targetDir);
-
-            Rotate(toTarget);
-
-            Vector3 rotatedEnd = ReconstructFromAngles();
-            float currentDist = Vector3.Distance(rotatedEnd, StartingPoint);
-            float scaleFactor = targetLength / currentDist;
-
-            Scale(scaleFactor);
-            RealignWithParentBulb();
+            if (!Constants.PIN_ENDPOINTS)
+            {
+                ReconstructFromAngles();
+            }
             
-            ReconstructFromAngles();*/
+            else
+            {
+                Vector3 currentEnd = ReconstructFromAngles();
+
+                Vector3 currentDir = (currentEnd - StartingPoint).normalized;
+                Vector3 targetDir = targetEndPoint - StartingPoint;
+                float targetLength = targetDir.magnitude;
+                targetDir /= targetLength;
+
+                Quaternion toTarget = Quaternion.FromToRotation(currentDir, targetDir);
+
+                Rotate(toTarget);
+
+                Vector3 rotatedEnd = ReconstructFromAngles();
+                float currentDist = Vector3.Distance(rotatedEnd, StartingPoint);
+                float scaleFactor = targetLength / currentDist;
+
+                Scale(scaleFactor);
+                RealignWithParentBulb();
+
+                ReconstructFromAngles();
+            }
         }
 
         void SetupLineRenderer()
@@ -427,8 +449,11 @@ namespace Telescopes
         {
             if (Input.GetKey("left shift") && Input.GetKeyDown("j"))
             {
-                Debug.Log("Segmenting curvature into " + DesignerController.instance.NumKMeansPoints + " segments");
-                CurvatureKMeans(DesignerController.instance.NumKMeansPoints);
+                List<float> points = EvenlySpacedPoints(ComputeNumImpulses());
+                SolveImpulsesVariableQP(points);
+                
+                //Debug.Log("Segmenting curvature into " + DesignerController.instance.NumKMeansPoints + " segments");
+                //CurvatureKMeans(DesignerController.instance.NumKMeansPoints);
             }
 
             if (Input.GetKey("left shift") && Input.GetKeyDown("l"))
@@ -480,30 +505,47 @@ namespace Telescopes
             }
         }
 
-        public TorsionImpulseCurve MakeCurve()
+        int ComputeNumImpulses()
         {
-            bool isShiftKeyDown = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
-
             int numImpulses = DesignerController.instance.numImpulses;
+            int maxNumShells = Mathf.FloorToInt(ArcLength / Constants.MIN_SHELL_LENGTH);
 
             if (parentBulb && childBulb)
             {
-                float radiusDiff = Mathf.Abs(parentBulb.radius - childBulb.radius);
-                numImpulses = Mathf.CeilToInt(radiusDiff / Constants.DEFAULT_WALL_THICKNESS);
-                numImpulses = Mathf.Max(numImpulses, 2);
+                // Compute the amount by which we have to shrink
+                float radiusDiff = Mathf.Abs(parentBulb.radius - childBulb.radius) - ArcLength * Constants.TAPER_SLOPE;
+                // Compute how much we will shrink by following the arc length of this curve
+                numImpulses = Mathf.CeilToInt(radiusDiff / Constants.WALL_THICKNESS);
+                numImpulses = Mathf.Max(Mathf.Min(numImpulses, maxNumShells), 2);
             }
 
             else if (parentBulb)
             {
-                numImpulses = Mathf.CeilToInt((parentBulb.radius - 0.1f) / Constants.DEFAULT_WALL_THICKNESS);
-                numImpulses = Mathf.Max(numImpulses, 2);
+                float radiusDiff = (parentBulb.radius - 2 * Constants.WALL_THICKNESS
+                    - ArcLength * Constants.TAPER_SLOPE);
+                numImpulses = Mathf.CeilToInt(radiusDiff / Constants.WALL_THICKNESS);
+                numImpulses = Mathf.Max(Mathf.Min(numImpulses, maxNumShells), 2);
             }
 
             else if (childBulb)
             {
-                numImpulses = Mathf.CeilToInt((childBulb.radius - 0.1f) / Constants.DEFAULT_WALL_THICKNESS);
-                numImpulses = Mathf.Max(numImpulses, 2);
+                float radiusDiff = (childBulb.radius - 2 * Constants.WALL_THICKNESS
+                    - ArcLength * Constants.TAPER_SLOPE);
+                numImpulses = Mathf.CeilToInt(radiusDiff / Constants.WALL_THICKNESS);
+                numImpulses = Mathf.Max(Mathf.Min(numImpulses, maxNumShells), 2);
             }
+
+            Debug.Log("Max num shells = " + maxNumShells + ", numImpulses = " + numImpulses);
+
+            return numImpulses;
+        }
+
+        public TorsionImpulseCurve MakeImpulseCurve()
+        {
+            bool isShiftKeyDown = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+            bool isAltKeyDown = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+
+            int numImpulses = ComputeNumImpulses();
 
             List<float> points = EvenlySpacedPoints(numImpulses);
             if (isShiftKeyDown)
@@ -517,6 +559,11 @@ namespace Telescopes
                     return MakeTorsionImpulseCurve(impulses, points, slope);
                 }
             }
+            else if (isAltKeyDown)
+            {
+                Debug.Log("Alt down");
+                return SolveImpulsesVariableQP(points);
+            }
             else return SolveImpulsesQP(points);
         }
 
@@ -524,11 +571,13 @@ namespace Telescopes
         {
             float step = ArcLength / num;
             List<float> steps = new List<float>();
+            
             for (int i = 0; i < num; i++)
             {
                 steps.Add(i * step);
             }
             steps.Add(ArcLength);
+
 
             return steps;
         }
@@ -626,14 +675,7 @@ namespace Telescopes
 
             Vector3 startingNormal = Vector3.Cross(startingBinormal, startingTangent);
             OrthonormalFrame startFrame = new OrthonormalFrame(startingTangent, startingNormal, startingBinormal);
-
-            /*
-            TorsionImpulseCurve[] old = FindObjectsOfType<TorsionImpulseCurve>();
-            foreach (TorsionImpulseCurve g in old)
-            {
-                Destroy(g.gameObject);
-            }*/
-
+            
             List<float> arcSteps = new List<float>();
             for (int i = 0; i < arcPoints.Count - 1; i++)
             {
@@ -646,6 +688,33 @@ namespace Telescopes
 
             impulseCurve.InitFromData(impulses, arcSteps,
                 averageCurvature, constTorsion,
+                startFrame, StartingPoint);
+
+            impulseCurve.SetMaterial(lineRender.material);
+
+            return impulseCurve;
+        }
+
+        TorsionImpulseCurve MakeTorsionImpulseCurve(List<float> impulses, List<float> arcPoints,
+            List<float> curvatureList, List<float> torsionList)
+        {
+            Debug.Log("Arc length of DC = " + ArcLength);
+
+            Vector3 startingNormal = Vector3.Cross(startingBinormal, startingTangent);
+            OrthonormalFrame startFrame = new OrthonormalFrame(startingTangent, startingNormal, startingBinormal);
+
+            List<float> arcSteps = new List<float>();
+            for (int i = 0; i < arcPoints.Count - 1; i++)
+            {
+                arcSteps.Add(arcPoints[i + 1] - arcPoints[i]);
+            }
+
+            GameObject obj = new GameObject();
+            obj.name = "TorsionApproxCurve";
+            TorsionImpulseCurve impulseCurve = obj.AddComponent<TorsionImpulseCurve>();
+
+            impulseCurve.InitFromData(impulses, arcSteps,
+                curvatureList, torsionList,
                 startFrame, StartingPoint);
 
             impulseCurve.SetMaterial(lineRender.material);

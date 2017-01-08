@@ -16,10 +16,23 @@ namespace Telescopes
 
         public PointType Type;
 
+        MeshRenderer mRenderer;
+
         void Start()
         {
             if (Type == PointType.Spline) radius = 0.1f;
             gameObject.layer = 9;
+
+            if (!mRenderer) mRenderer = GetComponent<MeshRenderer>();
+
+            if (Type == PointType.Bulb)
+            {
+                mRenderer.material = DesignerController.instance.defaultNodeMaterial;
+            }
+            else if (Type == PointType.EmptyJuncture)
+            {
+                mRenderer.material = DesignerController.instance.transparentNodeMaterial;
+            }
         }
 
         public void AttachToBulb(DraggablePoint bulb)
@@ -104,27 +117,55 @@ namespace Telescopes
 
         public void SetSize(float f)
         {
-            if (Type == PointType.Bulb)
+            if (Type == PointType.Bulb || Type == PointType.EmptyJuncture)
             {
                 containingCanvas.mostRecentPoint = transform.position;
-                radius = Mathf.Max(f, 0.05f);
+                radius = Mathf.Max(f, 2 * Constants.WALL_THICKNESS);
                 transform.localScale = new Vector3(radius, radius, radius) * 2;
             }
         }
 
         public void Resize(float f)
         {
-            if (Type == PointType.Bulb)
+            if (Type == PointType.Bulb || Type == PointType.EmptyJuncture)
             {
                 containingCanvas.mostRecentPoint = transform.position;
-                radius = Mathf.Max(radius + f, 0.05f);
+                radius = Mathf.Max(radius + f, 2 * Constants.WALL_THICKNESS);
                 transform.localScale = new Vector3(radius, radius, radius) * 2;
+            }
+        }
+
+        public void SwitchBulbType(PointType newType)
+        {
+            if (!mRenderer) mRenderer = GetComponent<MeshRenderer>();
+
+            Type = newType;
+
+            switch (Type)
+            {
+                case PointType.Bulb:
+                    mRenderer.material = DesignerController.instance.defaultNodeMaterial;
+                    SetSize(radius);
+                    GetComponent<SphereCollider>().enabled = true;
+                    break;
+                case PointType.Spline:
+                    mRenderer.material = DesignerController.instance.defaultNodeMaterial;
+                    transform.localScale = new Vector3(0.2f, 0.2f, 0.2f);
+                    GetComponent<SphereCollider>().enabled = true;
+                    break;
+                case PointType.EmptyJuncture:
+                    mRenderer.material = DesignerController.instance.transparentNodeMaterial;
+                    SetSize(radius);
+                    GetComponent<SphereCollider>().enabled = false;
+                    break;
+                default:
+                    break;
             }
         }
 
         public DCurveBulb ConvertToBulb()
         {
-            if (Type == PointType.Bulb)
+            if (Type != PointType.Spline)
             {
                 GameObject bulbObj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                 bulbObj.name = "discreteBulb";
@@ -132,6 +173,8 @@ namespace Telescopes
                 bulb.InitFromPoint(this);
 
                 gameObject.SetActive(false);
+
+                bulb.originalType = Type;
 
                 return bulb;
             }
@@ -141,6 +184,6 @@ namespace Telescopes
 
     public enum PointType
     {
-        Spline, Bulb
+        Spline, Bulb, EmptyJuncture
     }
 }

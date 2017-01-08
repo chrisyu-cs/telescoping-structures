@@ -289,8 +289,6 @@ namespace Telescopes
                     }
                 }
 
-                Debug.Log("Min dot at arc " + arcPos + " = " + minDot + " at child arc " + closestArc);
-
                 // Don't count the change if the dot product is too large, because this probably means
                 // we went past the end of the arc segment.
                 if (minDot > 0.25f) continue;
@@ -304,9 +302,7 @@ namespace Telescopes
                 maxRequiredRadius = Mathf.Max(requiredRadius, maxRequiredRadius);
             }
             // Account for wall thickness
-            maxRequiredRadius += Constants.DEFAULT_WALL_THICKNESS;
-
-            Debug.Log("Required = " + maxRequiredRadius + ", current = " + parent.radius);
+            maxRequiredRadius += Constants.WALL_THICKNESS;
 
             // Widen the parent so it contains the child shell.
             // However, don't ever decrease the thickness.
@@ -459,14 +455,14 @@ namespace Telescopes
         }
 
         public static TelescopeSegment telescopeOfCone(Vector3 startPos, float startRadius,
-            Vector3 endPos, float endRadius, float wallThickness = Constants.DEFAULT_WALL_THICKNESS)
+            Vector3 endPos, float endRadius, float wallThickness = Constants.WALL_THICKNESS)
         {
             return telescopeOfCone(startPos, startRadius, endPos, endRadius, Vector3.zero);
         }
 
         public static TelescopeSegment telescopeOfCone(Vector3 startPos, float startRadius,
             Vector3 endPos, float endRadius, Vector3 curvatureCenter,
-            float wallThickness = Constants.DEFAULT_WALL_THICKNESS,
+            float wallThickness = Constants.WALL_THICKNESS,
             bool useCurvature = false)
         {
             float curvature;
@@ -623,6 +619,30 @@ namespace Telescopes
             Math3d.ClosestPointsOnTwoLines(out closest1, out closest2, v12base, v12perp, v13base, v13perp);
 
             return (closest1 + closest2) / 2;
+        }
+
+        static List<GameObject> displayedPoints = new List<GameObject>();
+
+        public static void DisplayPoint(Vector3 point)
+        {
+            GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            sphere.transform.position = point;
+            sphere.transform.localScale = new Vector3(0.1f, 0.1f, 0.1f);
+
+            displayedPoints.Add(sphere);
+
+            MeshRenderer renderer = sphere.GetComponent<MeshRenderer>();
+            renderer.material.color = Color.blue;
+        }
+
+        public static void ClearDisplayedPoints()
+        {
+            foreach (GameObject o in displayedPoints)
+            {
+                GameObject.Destroy(o);
+            }
+
+            displayedPoints.Clear();
         }
 
         public static void DisplayLine(List<Vector3> linePoints)

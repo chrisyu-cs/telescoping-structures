@@ -7,16 +7,20 @@ namespace Telescopes
     {
         public float radius = 0.5f;
 
+        public PointType originalType;
+
         private IParameterizedCurve pc;
         public IParameterizedCurve parentCurve {
             get { return pc; }
             set
             {
                 pc = value;
+                previousParentPosition = parentCurve.EndPosition;
                 previousParentTangent = parentCurve.EndTangent;
             }
         }
 
+        private Vector3 previousParentPosition;
         private Vector3 previousParentTangent;
         public List<IParameterizedCurve> childCurves;
 
@@ -46,6 +50,8 @@ namespace Telescopes
 
             newBulb.childCurves = new List<IParameterizedCurve>();
 
+            newBulb.originalType = originalType;
+
             return newBulb;
         }
 
@@ -59,7 +65,7 @@ namespace Telescopes
 
             foreach (IParameterizedCurve dc in childCurves)
             {
-                dc.RotateAndOffset(Quaternion.identity, newPos, radius);
+                dc.RotateAndOffset(Quaternion.identity, newPos, dc.StartTangent, radius);
             }
         }
 
@@ -73,15 +79,42 @@ namespace Telescopes
                 Quaternion rotationBetween = Quaternion.FromToRotation(previousParentTangent, newTangent);
                 previousParentTangent = newTangent;
 
-                Vector3 newPosition = parentCurve.EndPosition;
-                Vector3 newCenter = newPosition + (radius * newTangent);
+                if (originalType == PointType.Bulb)
+                {
+                    Vector3 newPosition = parentCurve.EndPosition;
+                    Vector3 center = newPosition + newTangent * radius;
+                    previousParentPosition = newPosition;
 
-                transform.position = newCenter;
-                transform.rotation = rotationBetween * transform.rotation;
+                    transform.rotation = rotationBetween * transform.rotation;
+                    transform.position = center;
+                }
+
+                else
+                {
+                    Vector3 newPosition = parentCurve.EndPosition;
+                    Vector3 translationBetween = newPosition - previousParentPosition;
+                    previousParentPosition = newPosition;
+
+                    transform.rotation = rotationBetween * transform.rotation;
+                    transform.position = transform.position + rotationBetween * translationBetween;
+                }
 
                 foreach (IParameterizedCurve dc in childCurves)
                 {
-                    if (dc != null) dc.RotateAndOffset(Quaternion.Inverse(rotationBetween), newCenter, radius);
+                    float currentRadius;
+                    Vector3 tangent;
+                    if (originalType == PointType.Bulb)
+                    {
+                        currentRadius = radius;
+                        tangent = dc.StartTangent;
+                    }
+                    else
+                    {
+                        currentRadius = Vector3.Distance(dc.StartPosition, transform.position);
+                        tangent = (dc.StartPosition - transform.position).normalized;
+                    }
+                    Quaternion rotation = Quaternion.Inverse(rotationBetween);
+                    if (dc != null) dc.RotateAndOffset(rotation, transform.position, rotation * tangent, currentRadius);
                 }
             }
         }

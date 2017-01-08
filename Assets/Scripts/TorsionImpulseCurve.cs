@@ -35,6 +35,17 @@ namespace Telescopes
             float curvature, float torsion,
             OrthonormalFrame initialFrame, Vector3 initialPos)
         {
+            List<float> c = new List<float>();
+            c.Add(curvature);
+            List<float> t = new List<float>();
+            t.Add(torsion);
+            InitFromData(impulses, arcSteps, c, t, initialFrame, initialPos);
+        }
+
+        public void InitFromData(List<float> impulses, List<float> arcSteps,
+            List<float> curvature, List<float> torsion,
+            OrthonormalFrame initialFrame, Vector3 initialPos)
+        {
             if (initialFrame.T.magnitude < 0.01f
                 || initialFrame.B.magnitude < 0.01f
                 || initialFrame.N.magnitude < 0.01f) {
@@ -45,8 +56,9 @@ namespace Telescopes
             displayPoints = new List<Vector3>();
             lRenderer = GetComponent<LineRenderer>();
             segments = new List<CurveSegment>();
+
             // Create the initial segment
-            CurveSegment prevHelix = new CurveSegment(initialPos, curvature, -torsion, 0, arcSteps[0], initialFrame);
+            CurveSegment prevHelix = new CurveSegment(initialPos, curvature[0], -torsion[0], 0, arcSteps[0], initialFrame);
             segments.Add(prevHelix);
             AddPointsOfSegment(prevHelix);
 
@@ -66,7 +78,10 @@ namespace Telescopes
                 Quaternion impulseRot = Quaternion.AngleAxis(Mathf.Rad2Deg * impulse, newFrame.T);
                 newFrame = newFrame.RotatedBy(impulseRot);
 
-                prevHelix = new CurveSegment(newBase, curvature, -torsion, impulse, arcStep, newFrame);
+                int clampedC = Mathf.Min(i, curvature.Count - 1);
+                int clampedT = Mathf.Min(i, torsion.Count - 1);
+
+                prevHelix = new CurveSegment(newBase, curvature[clampedC], -torsion[clampedT], impulse, arcStep, newFrame);
 
                 len += arcStep;
 
@@ -81,6 +96,8 @@ namespace Telescopes
             lRenderer.SetVertexCount(displayPoints.Count);
             lRenderer.SetPositions(displayPoints.ToArray());
             lRenderer.SetWidth(0.1f, 0.1f);
+
+            Debug.Log("Arc length of TIC = " + ArcLength);
         }
 
         public Vector3 StartTangent
@@ -99,6 +116,11 @@ namespace Telescopes
                 OrthonormalFrame endFrame = TransformedHelixFrame(last, last.arcLength);
                 return endFrame.T;
             }
+        }
+
+        public Vector3 StartPosition
+        {
+            get { return segments[0].startPosition; }
         }
 
         public Vector3 EndPosition
@@ -170,6 +192,11 @@ namespace Telescopes
                 segments[i] = cs;
             }
 
+            Redraw();
+        }
+
+        public void Redraw()
+        {
             displayPoints.Clear();
 
             foreach (CurveSegment seg in segments)
@@ -188,11 +215,48 @@ namespace Telescopes
             lRenderer.SetWidth(0.1f, 0.1f);
         }
 
-        public void RotateAndOffset(Quaternion rotation, Vector3 bulbCenter, float radius)
+        public void RecomputeAndRedraw()
+        {
+            displayPoints.Clear();
+            AddPointsOfSegment(segments[0]);
+
+            // For each impulse, recompute the curve along that segment.
+            for (int i = 1; i < segments.Count; i++)
+            {
+                CurveSegment prevHelix = segments[i - 1];
+                float impulse = segments[i].impulse;
+                // New start point is the end of the previous curve segment.
+                Vector3 newBase = TransformedHelixPoint(prevHelix, prevHelix.arcLength);
+                // New frame is the frame rotated to the end of the segment.
+                OrthonormalFrame newFrame = TransformedHelixFrame(prevHelix, prevHelix.arcLength);
+
+                CurveSegment s = segments[i];
+                s.frame = newFrame;
+                s.startPosition = newBase;
+                segments[i] = s;
+
+                // Apply the torsion impulse as well.
+                Quaternion impulseRot = Quaternion.AngleAxis(Mathf.Rad2Deg * impulse, newFrame.T);
+                newFrame = newFrame.RotatedBy(impulseRot);
+
+                AddPointsOfSegment(segments[i]);
+            }
+
+            // Add the last point of the last curve
+            int last = segments.Count - 1;
+            displayPoints.Add(TransformedHelixPoint(segments[last], segments[last].arcLength));
+
+            // Set up line renderer
+            lRenderer.SetVertexCount(displayPoints.Count);
+            lRenderer.SetPositions(displayPoints.ToArray());
+            lRenderer.SetWidth(0.1f, 0.1f);
+        }
+
+        public void RotateAndOffset(Quaternion rotation, Vector3 bulbCenter, Vector3 tangent, float radius)
         {
             Rotate(rotation);
             Vector3 currentStart = segments[0].startPosition;
-            Vector3 desired = bulbCenter + (radius * StartTangent);
+            Vector3 desired = bulbCenter + (radius * tangent);
             Vector3 offset = desired - currentStart;
             Translate(offset);
         }
@@ -248,17 +312,18 @@ namespace Telescopes
 
             CurveSegment initialSeg = (reverse) ? segments[segments.Count - 1] : segments[0];
 
-            float wallThickness = Constants.DEFAULT_WALL_THICKNESS;
+            float wallThickness = Constants.WALL_THICKNESS;
             float currRadius = startRadius;
 
             TelescopeParameters initial = new TelescopeParameters(initialSeg.arcLength, currRadius,
-                Constants.DEFAULT_WALL_THICKNESS, initialSeg.curvature, initialSeg.torsion, 0);
+                Constants.WALL_THICKNESS, initialSeg.curvature, initialSeg.torsion, 0);
             tParams.Add(initial);
 
             for (int i = 1; i < segments.Count; i++)
             {
                 int index = (reverse) ? segments.Count - 1 - i : i;
 
+                // Subtract the wall thickness of the previous piece
                 currRadius -= wallThickness;
 
                 float curvature = (reverse) ? segments[index].curvature : segments[index].curvature;
@@ -326,6 +391,14 @@ namespace Telescopes
             if (Input.GetKey("left shift") && Input.GetKeyDown("u"))
             {
                 ToDiscreteCurve();
+            }
+
+            if (Input.GetKeyDown("r"))
+            {
+                CurveSegment s = segments[1];
+                s.curvature += 0.1f;
+                segments[1] = s;
+                RecomputeAndRedraw();
             }
         }
     }

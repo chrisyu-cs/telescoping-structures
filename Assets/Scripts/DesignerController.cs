@@ -27,6 +27,9 @@ namespace Telescopes
         public Material defaultTelescopeMaterial;
         public Material selectedTelescopeMaterial;
 
+        public Material defaultNodeMaterial;
+        public Material transparentNodeMaterial;
+
         public Material defaultLineMaterial;
 
         public InputCurve curve;
@@ -158,6 +161,23 @@ namespace Telescopes
                 }
             }
 
+            else if (Input.GetKeyDown("j") && RaycastShells(Input.mousePosition, out hitInfo))
+            {
+                DraggablePoint draggablePt = hitInfo.collider.GetComponent<DraggablePoint>();
+
+                if (draggablePt)
+                {
+                    if (draggablePt.Type == PointType.Bulb)
+                    {
+                        draggablePt.SwitchBulbType(PointType.EmptyJuncture);
+                    }
+                    else if (draggablePt.Type == PointType.EmptyJuncture)
+                    {
+                        draggablePt.SwitchBulbType(PointType.Bulb);
+                    }
+                }
+            }
+
             else if (Input.GetMouseButton(0) && draggable)
             {
                 Vector3 clickPos = Input.mousePosition;
@@ -166,7 +186,7 @@ namespace Telescopes
 
                 DraggablePoint intersectedBulb = splineCanvas.IntersectedBulb(worldPos);
 
-                if (draggable.Type != PointType.Bulb && draggable.IsEndPoint() && intersectedBulb)
+                if (draggable.Type == PointType.Spline && draggable.IsEndPoint() && intersectedBulb)
                 {
                     draggable.AttachToBulb(intersectedBulb);
                 }

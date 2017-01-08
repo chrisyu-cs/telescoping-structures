@@ -54,11 +54,14 @@ namespace Telescopes
         public V3Serialize position;
         // The radius of this bulb.
         public float radius;
+        // The type of the bulb.
+        public PointType type;
 
         public BulbData(DraggablePoint bulb)
         {
             position = new V3Serialize(bulb.transform.position);
             radius = bulb.radius;
+            type = bulb.Type;
         }
     }
 

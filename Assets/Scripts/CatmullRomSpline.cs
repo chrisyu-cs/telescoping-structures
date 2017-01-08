@@ -335,13 +335,12 @@ namespace Telescopes
 
                 spheres.Add(draggable);
             }
-
-            /*
+            
             if (spheres.Count >= 4)
             {
                 spheres[0].gameObject.SetActive(false);
                 spheres[spheres.Count - 1].gameObject.SetActive(false);
-            } */
+            }
         }
 
         public Vector3 sample(float t)
@@ -484,7 +483,7 @@ namespace Telescopes
             GameObject discretized = new GameObject();
             discretized.transform.parent = transform.parent;
 
-            discretized.name = "DiscretizedCurve";
+            discretized.name = "DiscretizedCurve" + DiscreteCurve.NextCurveNumber();
             DiscreteCurve dCurve = discretized.AddComponent<DiscreteCurve>();
             dCurve.InitFromPoints(discretePoints, segLength);
 
@@ -500,22 +499,21 @@ namespace Telescopes
         // Update is called once per frame
         void Update()
         {
-            if (Input.GetKeyDown("home"))
-            {
-                foreach (Vector3 v in points)
-                {
-                    Debug.Log(v);
-                }
-            }
+            bool setTangent = Input.GetKeyDown("home");
 
             if (points.Count >= 4)
             {
-                if (StartBulb)
+                if (StartBulb && StartBulb.Type == PointType.Bulb)
                 {
                     if (points.Count == 4)
                     {
                         spheres[1].FollowBulb(StartBulb, StartTangent());
                         spheres[0].Move(StartBulb.transform.position);
+                    }
+                    else if (setTangent)
+                    {
+                        spheres[0].Move(StartBulb.transform.position);
+                        spheres[1].FollowBulb(StartBulb, StartTangent());
                     }
                     else
                     {
@@ -524,12 +522,23 @@ namespace Telescopes
                         spheres[0].Move(StartEndpointCC(1));
                     }
                 }
-                if (EndBulb)
+
+                else if (StartBulb && StartBulb.Type == PointType.EmptyJuncture && points.Count > 4)
+                {
+                    spheres[0].Move(StartEndpointCC(1));
+                }
+
+                if (EndBulb && EndBulb.Type == PointType.Bulb)
                 {
                     if (points.Count == 4)
                     {
                         spheres[spheres.Count - 2].FollowBulb(EndBulb, -EndTangent());
                         spheres[spheres.Count - 1].Move(EndBulb.transform.position);
+                    }
+                    else if (setTangent)
+                    {
+                        spheres[spheres.Count - 1].Move(EndBulb.transform.position);
+                        spheres[spheres.Count - 2].FollowBulb(EndBulb, -EndTangent());
                     }
                     else
                     {
@@ -537,6 +546,11 @@ namespace Telescopes
                         spheres[spheres.Count - 2].FollowBulb(EndBulb, currentTangent.normalized);
                         spheres[spheres.Count - 1].Move(EndEndpointCC(1));
                     }
+                }
+
+                else if (EndBulb && EndBulb.Type == PointType.EmptyJuncture && points.Count > 4)
+                {
+                    spheres[spheres.Count - 1].Move(EndEndpointCC(1));
                 }
             }
         }

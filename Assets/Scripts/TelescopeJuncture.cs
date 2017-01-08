@@ -23,6 +23,21 @@ namespace Telescopes
         private JunctureType previousType;
         public JunctureType junctureType;
 
+        float sphereRadius;
+        public float Radius;
+
+        public Vector3 WorldSpaceMin
+        {
+            get
+            {
+                if (junctureType == JunctureType.Sphere)
+                {
+                    return new Vector3(-sphereRadius, -sphereRadius, -sphereRadius) + transform.position;
+                }
+                else return meshRenderer.bounds.min;
+            }
+        }
+
         // Use this for initialization
         void Start()
         {
@@ -49,11 +64,13 @@ namespace Telescopes
             line.SetWidth(0.1f, 0.1f);
 
             List<Vector3> points = new List<Vector3>();
+            int numNeighbors = 0;
 
             if (parentSegment)
             {
                 points.Add(parentSegment.LastShell.transform.position - transform.position);
                 points.Add(Vector3.zero);
+                numNeighbors++;
             }
 
             foreach (TelescopeSegment seg in childSegments)
@@ -62,10 +79,13 @@ namespace Telescopes
                 points.Add(Vector3.zero);
             }
 
+            numNeighbors += childSegments.Count;
+
             line.SetVertexCount(points.Count);
             line.SetPositions(points.ToArray());
 
-            junctureType = JunctureType.ConvexHull;
+            // If this bulb is a dead end, make it a sphere.
+            junctureType = (numNeighbors <= 1) ? JunctureType.Sphere : JunctureType.ConvexHull;
             previousType = JunctureType.None;
 
             if (!mFilter) mFilter = gameObject.AddComponent<MeshFilter>();
@@ -74,6 +94,11 @@ namespace Telescopes
                 meshRenderer = gameObject.AddComponent<MeshRenderer>();
                 meshRenderer.material = DesignerController.instance.defaultTelescopeMaterial;
             }
+        }
+
+        public void SetMaterial(Material m)
+        {
+            meshRenderer.material = m;
         }
 
         public override int numChildElements()
@@ -163,7 +188,7 @@ namespace Telescopes
 
         public void MakeSphere()
         {
-            mFilter.mesh = DesignerController.instance.SphereMesh;
+            Mesh m = DesignerController.instance.SphereMesh;
 
             List<Vector3> adjacentPoints = GetAdjacentRings();
 
@@ -174,14 +199,19 @@ namespace Telescopes
                 maxDistance = Mathf.Max(maxDistance, v.magnitude);
             }
 
-            Vector3[] vertices = mFilter.mesh.vertices;
+            Vector3[] vertices = m.vertices;
             // The default sphere has radius 0.5
             for (int i = 0; i < vertices.Length; i++)
             {
                 vertices[i] = vertices[i] * 2 * maxDistance;
             }
             mFilter.mesh.vertices = vertices;
+            mFilter.mesh.triangles = m.triangles;
 
+            mFilter.mesh.RecalculateBounds();
+            mFilter.mesh.RecalculateNormals();
+
+            sphereRadius = maxDistance;
         }
 
         public override void ExtendImmediate(float t)
@@ -201,7 +231,7 @@ namespace Telescopes
 
         static int JunctureCount = 0;
 
-        public static TelescopeJuncture CreateJuncture(Vector3 position)
+        public static TelescopeJuncture CreateJuncture(Vector3 position, float initialRadius)
         {
             // Create the actual object for the juncture
             GameObject junctureObj = new GameObject();
@@ -211,13 +241,19 @@ namespace Telescopes
             juncture.transform.position = position;
             juncture.childSegments = new List<TelescopeSegment>();
 
+            juncture.Radius = initialRadius;
+
             return juncture;
         }
 
         // Write a set of STLs for a juncture, and an OpenSCAD file that
         // compiles them all into one fused part.
-        public void WriteSTLOfJuncture(Vector3 minOffset)
+        public string WriteSTLOfJuncture(Vector3 minOffset, string objName)
         {
+            List<string> unionSTLs = new List<string>();
+            List<string> diffSTLs = new List<string>();
+            string bulbSTL = "";
+            
             // If there is a parent segment, write that
             if (parentSegment)
             {
@@ -228,7 +264,16 @@ namespace Telescopes
                 STLWriter.VectorTransform f =
                     (v => last.transform.rotation * v + last.transform.position - minOffset);
 
-                STLWriter.WriteSTLOfMesh(last.mesh, "scad/junctionParent.stl", f);
+                if (parentSegment.NumShells > 1 && parentSegment.Reversed)
+                {
+                    Mesh inner = last.GenerateInnerVolume(parentSegment.shells[parentSegment.NumShells - 2].getParameters(),
+                        -Constants.WALL_THICKNESS, extraRings: Constants.CUTS_PER_CYLINDER / 2);
+
+                    string parentVolumeSTL = objName + "-parentInner.stl";
+                    STLWriter.WriteSTLOfMesh(inner, "scad/" + parentVolumeSTL, f);
+
+                    diffSTLs.Add(parentVolumeSTL);
+                }
             }
 
             // Write each child segment as well
@@ -240,16 +285,17 @@ namespace Telescopes
                 STLWriter.VectorTransform f =
                     (v => first.transform.rotation * v + first.transform.position - minOffset);
 
-                STLWriter.WriteSTLOfMesh(first.mesh, "scad/junctionChild" + childNum + ".stl", f);
-
                 // Write a mesh for the inner volume contained in the shell,
                 // so that it can be subtracted out from the juncture
-                if (childSegment.NumShells > 1)
+                if (childSegment.NumShells > 1 && !childSegment.Reversed)
                 {
                     Mesh inner = first.GenerateInnerVolume(childSegment.shells[1].getParameters(),
-                        -Constants.DEFAULT_WALL_THICKNESS);
+                        -Constants.WALL_THICKNESS, extraRings: Constants.CUTS_PER_CYLINDER / 2);
 
-                    STLWriter.WriteSTLOfMesh(inner, "scad/junctionChildInner" + childNum + ".stl", f);
+                    string childVolumeSTL = objName + "-childInner" + childNum + ".stl";
+                    STLWriter.WriteSTLOfMesh(inner, "scad/" + childVolumeSTL, f);
+
+                    diffSTLs.Add(childVolumeSTL);
                 }
                 childNum++;
             }
@@ -260,7 +306,30 @@ namespace Telescopes
                 STLWriter.VectorTransform f =
                     (v => transform.rotation * v + transform.position - minOffset);
 
-                STLWriter.WriteSTLOfMesh(mFilter.mesh, "scad/junction.stl", f);
+                bulbSTL = objName + ".stl";
+                STLWriter.WriteSTLOfMesh(mFilter.mesh, "scad/" + bulbSTL, f);
+            }
+
+            string scadFile = objName + ".scad";
+            STLWriter.WriteSCADOfJunctureSTLs(bulbSTL, unionSTLs, diffSTLs, "scad/" + scadFile);
+            return scadFile;
+        }
+
+        void MakeMesh()
+        {
+            // Create the mesh for the new juncture type
+            switch (junctureType)
+            {
+                case JunctureType.None:
+                    break;
+                case JunctureType.ConvexHull:
+                    MakeConvexHull();
+                    break;
+                case JunctureType.Sphere:
+                    MakeSphere();
+                    break;
+                default:
+                    break;
             }
         }
 
@@ -270,7 +339,15 @@ namespace Telescopes
             {
                 MakeConvexHull();
             }
+
+            if (Input.GetKeyDown("]"))
+            {
+                bool done = CollisionIteration(0.5f);
+                MakeMesh();
+                Debug.Log("No more collisions = " + done);
+            }
             
+            /*
             if (Input.GetKey("left shift") && Input.GetKeyDown("enter"))
             {
                 Vector3 minPoint = meshRenderer.bounds.min;
@@ -285,8 +362,8 @@ namespace Telescopes
                     minPoint = TelescopeUtils.VectorMin(minPoint, childSegment.FirstShell.WorldSpaceBounds.min);
                 }
 
-                WriteSTLOfJuncture(minPoint);
-            }
+                WriteSTLOfJuncture(minPoint, name);
+            }*/
 
             if (previousType != junctureType)
             {
@@ -305,24 +382,9 @@ namespace Telescopes
 
                 previousType = junctureType;
 
-                // Create the mesh for the new juncture type
-                switch (junctureType)
-                {
-                    case JunctureType.None:
-                        break;
-                    case JunctureType.ConvexHull:
-                        MakeConvexHull();
-                        break;
-                    case JunctureType.Sphere:
-                        MakeSphere();
-                        break;
-                    default:
-                        break;
-                }
+                MakeMesh();
             }
         }
-
-        float Radius;
 
         void RotateChildSegment(TelescopeSegment seg, Quaternion localRotation)
         {
@@ -333,7 +395,50 @@ namespace Telescopes
             seg.shells[0].transform.localRotation = localRot;
         }
 
-        bool CollisionIteration()
+        bool CollisionIteration(float delta)
+        {
+            bool hasCollision = false;
+
+            if (parentSegment)
+            {
+                foreach (TelescopeSegment seg in childSegments)
+                {
+                    TelescopeShell parentShell = parentSegment.LastShell;
+                    TelescopeShell childShell = seg.FirstShell;
+                    float moveDistance;
+                    Vector3 moveDirection;
+
+                    if (parentShell.CollidesWith(childShell, out moveDistance, out moveDirection))
+                    {
+                        hasCollision = true;
+                        childShell.transform.position += 0.5f * moveDistance * delta * moveDirection;
+                        parentShell.transform.position -= 0.5f * moveDistance * delta * moveDirection;
+                    }
+                }
+            }
+
+            for (int i = 0; i < childSegments.Count; i++)
+            {
+                for (int j = i + 1; j < childSegments.Count; j++)
+                {
+                    TelescopeShell shell1 = childSegments[i].FirstShell;
+                    TelescopeShell shell2 = childSegments[j].FirstShell;
+                    float moveDistance;
+                    Vector3 moveDirection;
+
+                    if (shell1.CollidesWith(shell2, out moveDistance, out moveDirection))
+                    {
+                        hasCollision = true;
+                        shell2.transform.position += 0.5f * moveDistance * delta * moveDirection;
+                        shell1.transform.position -= 0.5f * moveDistance * delta * moveDirection;
+                    }
+                }
+            }
+
+            return !hasCollision;
+        }
+
+        bool CollisionIterationOld(float delta)
         {
             bool allOK = true;
 
@@ -379,7 +484,7 @@ namespace Telescopes
                         angleDiff *= Mathf.Rad2Deg;
 
                         Vector3 normal = Vector3.Cross(parentTangent, childTangent);
-                        Quaternion rot = Quaternion.AngleAxis(angleDiff, normal);
+                        Quaternion rot = Quaternion.AngleAxis(delta * angleDiff, normal);
 
                         RotateChildSegment(seg, rot);
                     }
@@ -412,8 +517,8 @@ namespace Telescopes
                         angleDiff *= Mathf.Rad2Deg;
 
                         Vector3 normal = Vector3.Cross(tangent1, tangent2);
-                        Quaternion rot1 = Quaternion.AngleAxis(-angleDiff / 2, normal);
-                        Quaternion rot2 = Quaternion.AngleAxis(angleDiff / 2, normal);
+                        Quaternion rot1 = Quaternion.AngleAxis(delta * -angleDiff / 2, normal);
+                        Quaternion rot2 = Quaternion.AngleAxis(delta * angleDiff / 2, normal);
 
                         RotateChildSegment(childSegments[i], rot1);
                         RotateChildSegment(childSegments[j], rot2);
@@ -423,6 +528,7 @@ namespace Telescopes
 
             return allOK;
         }
+
     }
 }
 
