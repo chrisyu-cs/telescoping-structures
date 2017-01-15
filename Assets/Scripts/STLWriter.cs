@@ -132,8 +132,8 @@ namespace Telescopes
         {
             if (v.x < 0 || v.y < 0 || v.z < 0)
             {
-                throw new System.Exception("Vector not in positive octant ("
-                    + v.x + ", " + v.y + ", " + v.z + ")");
+                //throw new System.Exception("Vector not in positive octant ("
+                //    + v.x + ", " + v.y + ", " + v.z + ")");
             }
         }
 

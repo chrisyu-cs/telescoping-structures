@@ -1,6 +1,8 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
 
+using System.IO;
+
 using NumericsLib;
 using MathNet.Numerics;
 using MathNet.Numerics.LinearAlgebra;
@@ -48,6 +50,9 @@ namespace Telescopes
 
         static int CurveNumber = 0;
 
+        public float BulbShrinkRatio = 1f;
+        float ActualShrinkRatio = 1f;
+
         public static int NextCurveNumber()
         {
             return CurveNumber++;
@@ -82,6 +87,14 @@ namespace Telescopes
                 previousVec.Normalize();
                 nextVec.Normalize();
 
+                // If zero, then treat it as a straight segment
+                if (nextVec.magnitude < 0.5f)
+                {
+                    DCurvePoint d = new DCurvePoint(prevBinormal, 0, 0);
+                    discretizedPoints.Add(d);
+                    continue;
+                }
+
                 Vector3 curvatureBinormal = Vector3.Cross(previousVec, nextVec).normalized;
                 if (i == 1) startingBinormal = curvatureBinormal;
 
@@ -101,7 +114,11 @@ namespace Telescopes
 
                     // If the bend angle is tiny, then the curve is basically straight, so
                     // just set twist values to 0 to avoid unnecessary twisting.
-                    if (bendAngle <= 0.1) twistAngle = 0;
+                    /*if (Mathf.Abs(bendAngle) <= 0.1)
+                    {
+                        bendAngle = 0;
+                        twistAngle = 0;
+                    }*/
                 }
 
                 if (float.IsNaN(bendAngle)) throw new System.Exception("Bend angle is nan, dot = " + dot);
@@ -439,11 +456,6 @@ namespace Telescopes
             }
         }
 
-        void FixTorsionValues()
-        {
-
-        }
-
         // Update is called once per frame
         void Update()
         {
@@ -488,6 +500,37 @@ namespace Telescopes
                 }
             }
 
+            else if (Input.GetKey("left shift") && Input.GetKeyDown("home"))
+            {
+                // Dump cumulative torsion function
+                float cumulativeT = 0;
+                float currentArc = 0;
+
+                List<float> cumulativeTs = new List<float>();
+                List<float> arcPos = new List<float>();
+
+                cumulativeTs.Add(cumulativeT);
+                arcPos.Add(currentArc);
+
+                foreach (DCurvePoint dcp in discretizedPoints)
+                {
+                    cumulativeT += dcp.twistingAngle;
+                    currentArc += segmentLength;
+
+                    cumulativeTs.Add(cumulativeT);
+                    arcPos.Add(currentArc);
+                }
+
+                using (StreamWriter file = new StreamWriter("discreteCurveFn.csv"))
+                {
+                    for (int i = 0; i < cumulativeTs.Count; i++)
+                    {
+                        file.WriteLine(arcPos[i] + "," + cumulativeTs[i]);
+                    }
+                }
+                Debug.Log("Wrote discrete curve's cumulative torsion to discreteCurveFn.csv");
+            }
+
             if (flowMode == FlowMode.CurvatureFlow)
             {
                 //CurvaturePositionFlow(0.0002f);
@@ -512,8 +555,12 @@ namespace Telescopes
 
             if (parentBulb && childBulb)
             {
+                float oldLarger = Mathf.Max(parentBulb.radius, childBulb.radius);
+                float smaller = Mathf.Min(parentBulb.radius, childBulb.radius);
+                float larger = Mathf.LerpUnclamped(smaller, oldLarger, BulbShrinkRatio);
+                ActualShrinkRatio = larger / oldLarger;
                 // Compute the amount by which we have to shrink
-                float radiusDiff = Mathf.Abs(parentBulb.radius - childBulb.radius) - ArcLength * Constants.TAPER_SLOPE;
+                float radiusDiff = (larger - smaller) - ArcLength * Constants.TAPER_SLOPE;
                 // Compute how much we will shrink by following the arc length of this curve
                 numImpulses = Mathf.CeilToInt(radiusDiff / Constants.WALL_THICKNESS);
                 numImpulses = Mathf.Max(Mathf.Min(numImpulses, maxNumShells), 2);
@@ -521,16 +568,24 @@ namespace Telescopes
 
             else if (parentBulb)
             {
-                float radiusDiff = (parentBulb.radius - 2 * Constants.WALL_THICKNESS
-                    - ArcLength * Constants.TAPER_SLOPE);
+                float oldLarger = parentBulb.radius;
+                float smaller = Constants.DEFAULT_MIN_RADIUS;
+                float larger = Mathf.LerpUnclamped(smaller, oldLarger, BulbShrinkRatio);
+                ActualShrinkRatio = larger / oldLarger;
+
+                float radiusDiff = (larger - smaller - ArcLength * Constants.TAPER_SLOPE);
                 numImpulses = Mathf.CeilToInt(radiusDiff / Constants.WALL_THICKNESS);
                 numImpulses = Mathf.Max(Mathf.Min(numImpulses, maxNumShells), 2);
             }
 
             else if (childBulb)
             {
-                float radiusDiff = (childBulb.radius - 2 * Constants.WALL_THICKNESS
-                    - ArcLength * Constants.TAPER_SLOPE);
+                float oldLarger = childBulb.radius;
+                float smaller = Constants.DEFAULT_MIN_RADIUS;
+                float larger = Mathf.LerpUnclamped(smaller, oldLarger, BulbShrinkRatio);
+                ActualShrinkRatio = larger / oldLarger;
+
+                float radiusDiff = (larger - smaller - ArcLength * Constants.TAPER_SLOPE);
                 numImpulses = Mathf.CeilToInt(radiusDiff / Constants.WALL_THICKNESS);
                 numImpulses = Mathf.Max(Mathf.Min(numImpulses, maxNumShells), 2);
             }
@@ -691,6 +746,7 @@ namespace Telescopes
                 startFrame, StartingPoint);
 
             impulseCurve.SetMaterial(lineRender.material);
+            impulseCurve.BulbShrinkRatio = ActualShrinkRatio;
 
             return impulseCurve;
         }

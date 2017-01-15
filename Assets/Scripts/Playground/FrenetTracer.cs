@@ -24,7 +24,7 @@ namespace Telescopes
             transform.position = dCurve.PositionAtPoint(arcLength);
             OrthonormalFrame frame = bishop ? dCurve.BishopAtPoint(arcLength) : dCurve.FrenetAtPoint(arcLength);
 
-            Quaternion r = Quaternion.LookRotation(frame.T, frame.B);
+            Quaternion r = Quaternion.LookRotation(frame.T, frame.N);
             transform.rotation = r;
         }
 

@@ -44,6 +44,8 @@ namespace Telescopes
         public List<Vector3> BottomRing { get { return bottomVerts; } }
         public List<Vector3> TopRing { get { return topVerts; } }
 
+        public bool AlwaysExtend = false;
+
         public Mesh mesh
         {
             get { return mFilter.mesh; }
@@ -553,8 +555,9 @@ namespace Telescopes
             TelescopeParameters ourParams = getParameters();
             CylinderMesh innerCyl;
 
-            // If there is a change in torsion from this shell to the next...
-            if (nextParams != null && (nextParams.curvature != curvature || nextParams.torsion != torsion))
+            // If there is a change in profile from this shell to the next...
+            if (nextParams != null && (nextParams.curvature != curvature || nextParams.torsion != torsion
+                || nextParams.radius < radius - Constants.WALL_THICKNESS * 1.01f))
             {
                 // Generate the outer profile of the child shell; this will become
                 // the inner profile of this shell.
@@ -732,6 +735,7 @@ namespace Telescopes
         public void SetTransform()
         {
             float extendT = Mathf.Clamp01(extensionRatio * 2);
+            if (AlwaysExtend) extendT = 1;
             float twistT = Mathf.Clamp01(extensionRatio * 2 - 1);
 
             if (!Reversed)

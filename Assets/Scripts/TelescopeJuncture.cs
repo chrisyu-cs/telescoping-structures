@@ -10,6 +10,8 @@ namespace Telescopes
         public float offsetAlongParent;
         public Vector3 offsetFromParent;
 
+        public Mesh customMesh;
+
         public bool keepLocalPositionOnStart = false;
 
         public TelescopeSegment parentSegment;
@@ -315,7 +317,7 @@ namespace Telescopes
             return scadFile;
         }
 
-        void MakeMesh()
+        public void MakeMesh()
         {
             // Create the mesh for the new juncture type
             switch (junctureType)
@@ -328,9 +330,22 @@ namespace Telescopes
                 case JunctureType.Sphere:
                     MakeSphere();
                     break;
+                case JunctureType.CustomMesh:
+                    mFilter.mesh.vertices = customMesh.vertices;
+                    mFilter.mesh.triangles = customMesh.triangles;
+                    mFilter.mesh.uv = customMesh.uv;
+                    mFilter.mesh.RecalculateBounds();
+                    mFilter.mesh.RecalculateNormals();
+                    break;
                 default:
                     break;
             }
+        }
+
+        public void ExportJunctureToOBJ()
+        {
+            string objName = name + ".obj";
+            OBJWriter.ExportToOBJ(mFilter.mesh, objName);
         }
 
         void Update()
@@ -345,6 +360,11 @@ namespace Telescopes
                 bool done = CollisionIteration(0.5f);
                 MakeMesh();
                 Debug.Log("No more collisions = " + done);
+            }
+
+            if (Input.GetKeyDown("end"))
+            {
+                ExportJunctureToOBJ();
             }
             
             /*
@@ -374,6 +394,7 @@ namespace Telescopes
                         break;
                     case JunctureType.ConvexHull:
                     case JunctureType.Sphere:
+                    case JunctureType.CustomMesh:
                         mFilter.mesh.Clear();
                         break;
                     default:
@@ -395,7 +416,7 @@ namespace Telescopes
             seg.shells[0].transform.localRotation = localRot;
         }
 
-        bool CollisionIteration(float delta)
+        public bool CollisionIteration(float delta)
         {
             bool hasCollision = false;
 
@@ -534,5 +555,5 @@ namespace Telescopes
 
 public enum JunctureType
 {
-    None, ConvexHull, Sphere
+    None, ConvexHull, Sphere, CustomMesh
 }

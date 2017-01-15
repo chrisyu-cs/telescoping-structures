@@ -31,7 +31,7 @@ namespace Telescopes
 
                 OrthonormalFrame frame = new OrthonormalFrame(Vector3.forward, Vector3.up, Vector3.left);
 
-                axis.InitFromData(impulses, arcs, shell.curvature, shell.torsion, frame, Vector3.zero);
+                axis.InitFromData(impulses, arcs, shell.curvature, -shell.torsion, frame, Vector3.zero);
                 LineRenderer axisLR = axis.GetComponent<LineRenderer>();
                 axisLR.useWorldSpace = false;
                 axisLR.material = lineMaterial;

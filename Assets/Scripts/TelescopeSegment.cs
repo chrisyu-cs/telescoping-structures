@@ -57,6 +57,8 @@ namespace Telescopes
             }
         }
 
+        public float MinExt = 0;
+
         public TelescopeShell LastShell
         {
             get
@@ -251,9 +253,6 @@ namespace Telescopes
 
         public void MakeAllShells(List<TelescopeParameters> paramList, bool reversed = false)
         {
-            Debug.Log("Wall = " + Constants.WALL_THICKNESS + ", slope = " + Constants.TAPER_SLOPE +
-                ", gap = " + Constants.SHELL_GAP + ", indent = " + Constants.INDENT_RATIO);
-
             DeleteTelescope();
             
             // Create an object for the first shell
@@ -374,6 +373,7 @@ namespace Telescopes
             MakeAllShells(concreteParams);
             concreteParameters = concreteParams;
             currentExtension = 1;
+            parameters = concreteParams;
             SetShellExtensions(currentExtension);
         }
 
@@ -451,6 +451,12 @@ namespace Telescopes
                     ts.extensionRatio = 0;
                 }
             }
+
+            if (LastShell.extensionRatio < MinExt)
+            {
+                LastShell.extensionRatio = MinExt;
+                LastShell.SetTransform();
+            }
         }
 
         public void SetSmallestExtension(float t)
@@ -463,6 +469,7 @@ namespace Telescopes
         public override void ExtendImmediate(float t)
         {
             SetShellExtensions(t);
+            currentExtension = t;
             for (int i = 1; i < shells.Count; i++)
             {
                 shells[i].SetTransform();

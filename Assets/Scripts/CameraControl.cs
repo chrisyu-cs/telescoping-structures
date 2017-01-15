@@ -18,25 +18,56 @@ namespace Telescopes
 
         private int screenshotNum = 0;
 
+        public bool Freeze = false;
+        public bool CinematicMode = false;
+
+        float interpUp, interpRight, interpJump;
+
+        Camera thisCamera;
+        public Camera alternateCamera;
+
         // Use this for initialization
         void Start()
         {
             locked = false;
             theta = transform.rotation.eulerAngles.y;
             phi = transform.rotation.eulerAngles.x;
-
-            mode = ControlMode.FreeMove;
+            
+            thisCamera = GetComponent<Camera>();
+            if (alternateCamera) alternateCamera.enabled = false;
         }
 
-        void ProcessFreeMove()
+        void ProcessTranslate()
         {
             float up = Input.GetAxis("Vertical");
             float right = Input.GetAxis("Horizontal");
             float rmb = Input.GetAxis("Jump");
 
-            transform.position += up * transform.forward * Time.deltaTime * translateSpeed;
-            transform.position += right * transform.right * Time.deltaTime * translateSpeed;
-            transform.position += rmb * transform.up * Time.deltaTime * translateSpeed;
+            if (CinematicMode)
+            {
+                interpUp = Mathf.Lerp(interpUp, up, 0.05f);
+                interpRight = Mathf.Lerp(interpRight, right, 0.05f);
+                interpJump = Mathf.Lerp(interpJump, rmb, 0.05f);
+            }
+            else
+            {
+                interpUp = up;
+                interpRight = right;
+                interpJump = rmb;
+            }
+
+            Vector3 pos = transform.position;
+
+            pos += interpUp * transform.forward * Time.deltaTime * translateSpeed;
+            pos += interpRight * transform.right * Time.deltaTime * translateSpeed;
+            pos += interpJump * transform.up * Time.deltaTime * translateSpeed;
+
+            transform.position = pos;
+        }
+
+        void ProcessFreeMove()
+        {
+            ProcessTranslate();
 
             if (!locked && Input.GetAxis("Fire2") > 0.5f)
             {
@@ -47,7 +78,9 @@ namespace Telescopes
                 phi = Mathf.Clamp(phi + rotateSpeed * mouseY, -90, 90);
             }
 
-            transform.rotation = Quaternion.Euler(phi, theta, 0);
+            Quaternion q = Quaternion.Euler(phi, theta, 0);
+            if (CinematicMode) transform.rotation = Quaternion.Slerp(transform.rotation, q, 0.1f);
+            else transform.rotation = q;
         }
 
         void ProcessLookAtTarget()
@@ -90,6 +123,12 @@ namespace Telescopes
             {
                 ProcessLookAtTarget();
             }
+            else if (LookTarget && mode == ControlMode.TrackTarget)
+            {
+                if (!Freeze) ProcessTranslate();
+                Quaternion q = Quaternion.LookRotation(LookTarget.position - transform.position);
+                transform.rotation = Quaternion.Slerp(transform.rotation, q, 0.1f);
+            }
 
             if (Input.GetKeyDown("f12"))
             {
@@ -97,11 +136,25 @@ namespace Telescopes
                 screenshotNum++;
                 Debug.Log("Screenshot saved");
             }
+
+            if (alternateCamera && Input.GetKeyDown("f1"))
+            {
+                if (thisCamera.enabled)
+                {
+                    alternateCamera.enabled = true;
+                    thisCamera.enabled = false;
+                }
+                else
+                {
+                    thisCamera.enabled = true;
+                    alternateCamera.enabled = false;
+                }
+            }
         }
 
         public enum ControlMode
         {
-            FreeMove, LookAtTarget
+            FreeMove, LookAtTarget, TrackTarget
         }
     }
 }

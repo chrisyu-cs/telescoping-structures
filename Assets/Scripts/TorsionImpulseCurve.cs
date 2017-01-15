@@ -1,6 +1,8 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
 
+using System.IO;
+
 namespace Telescopes
 {
     [RequireComponent(typeof(LineRenderer))]
@@ -15,6 +17,8 @@ namespace Telescopes
         public DCurveBulb EndJuncture;
 
         private static int numScopes = 0;
+
+        public float BulbShrinkRatio = 1f;
 
         public int NumSegments { get { return segments.Count; } }
 
@@ -285,6 +289,21 @@ namespace Telescopes
             }
         }
 
+        public OrthonormalFrame FrameAtPoint(float arcLen)
+        {
+            float segArcLength = 0;
+            int currentSeg = 0;
+            for (int i = 0; i < segments.Count; i++)
+            {
+                currentSeg = i;
+                if (arcLen < segArcLength + segments[i].arcLength) break;
+                segArcLength += segments[i].arcLength;
+            }
+
+            float arcPos = arcLen - segArcLength;
+            return TransformedHelixFrame(segments[currentSeg], arcPos);
+        }
+
         OrthonormalFrame TransformedHelixFrame(CurveSegment cs, float arcLen)
         {
             // Apply the local helix rotation.
@@ -294,6 +313,21 @@ namespace Telescopes
                 * Quaternion.Inverse(oldRot);
             OrthonormalFrame newFrame = cs.frame.RotatedBy(newRot);
             return newFrame;
+        }
+
+        public Vector3 PositionAtPoint(float arcLen)
+        {
+            float segArcLength = 0;
+            int currentSeg = 0;
+            for (int i = 0; i < segments.Count; i++)
+            {
+                currentSeg = i;
+                if (arcLen < segArcLength + segments[i].arcLength) break;
+                segArcLength += segments[i].arcLength;
+            }
+
+            float arcPos = arcLen - segArcLength;
+            return TransformedHelixPoint(segments[currentSeg], arcPos);
         }
 
         Vector3 TransformedHelixPoint(CurveSegment cs, float arcLen)
@@ -313,7 +347,7 @@ namespace Telescopes
             CurveSegment initialSeg = (reverse) ? segments[segments.Count - 1] : segments[0];
 
             float wallThickness = Constants.WALL_THICKNESS;
-            float currRadius = startRadius;
+            float currRadius = startRadius * BulbShrinkRatio;
 
             TelescopeParameters initial = new TelescopeParameters(initialSeg.arcLength, currRadius,
                 Constants.WALL_THICKNESS, initialSeg.curvature, initialSeg.torsion, 0);
@@ -322,6 +356,13 @@ namespace Telescopes
             for (int i = 1; i < segments.Count; i++)
             {
                 int index = (reverse) ? segments.Count - 1 - i : i;
+
+                /*
+                if (i == 2 && StartJuncture && StartJuncture.childCurves.Count == 5)
+                {
+                    Debug.Log("Hack to create lizard toenails, please delete once done");
+                    currRadius -= 1.5f * wallThickness;
+                }*/
 
                 // Subtract the wall thickness of the previous piece
                 currRadius -= wallThickness;
@@ -391,6 +432,19 @@ namespace Telescopes
             if (Input.GetKey("left shift") && Input.GetKeyDown("u"))
             {
                 ToDiscreteCurve();
+            }
+
+            else if (Input.GetKey("left shift") && Input.GetKeyDown("home"))
+            {
+                // Dump torsion / arc length of each segment, and impulses
+                using (StreamWriter file = new StreamWriter("ticFn.csv"))
+                {
+                    foreach (CurveSegment cs in segments)
+                    {
+                        file.WriteLine(cs.impulse + "," + cs.arcLength + "," + cs.torsion);
+                    }
+                }
+                Debug.Log("Wrote torsion impulse curve data to ticFn.csv");
             }
 
             if (Input.GetKeyDown("r"))

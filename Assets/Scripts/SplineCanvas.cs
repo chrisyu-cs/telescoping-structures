@@ -216,6 +216,204 @@ namespace Telescopes
             return null;
         }
 
+        public void SplineToDCurve()
+        {
+            Dictionary<DraggablePoint, DCurveBulb> bulbDict = new Dictionary<DraggablePoint, DCurveBulb>();
+
+            foreach (DraggablePoint bulb in bulbs)
+            {
+                DCurveBulb dcBulb = bulb.ConvertToBulb();
+                dBulbs.Add(dcBulb);
+                bulbDict.Add(bulb, dcBulb);
+            }
+
+            foreach (CatmullRomSpline spline in splines)
+            {
+                DiscreteCurve dc = spline.ConvertToDCurve();
+
+                if (spline.StartBulb)
+                {
+                    DCurveBulb parentOfSpline = bulbDict[spline.StartBulb];
+                    dc.parentBulb = parentOfSpline;
+                    parentOfSpline.childCurves.Add(dc);
+                }
+                if (spline.EndBulb)
+                {
+                    DCurveBulb endOfSpline = bulbDict[spline.EndBulb];
+                    dc.childBulb = endOfSpline;
+                    endOfSpline.parentCurve = dc;
+                }
+
+                AddDCurve(dc);
+            }
+
+            stage = CanvasStage.DCurve;
+        }
+
+        public void DCurveToTIC()
+        {
+            // Clear away the old stuff
+            foreach (TorsionImpulseCurve tic in tiCurves)
+            {
+                Destroy(tic.gameObject);
+            }
+            tiCurves.Clear();
+
+            foreach (DCurveBulb dcb in tiBulbs)
+            {
+                Destroy(dcb.gameObject);
+            }
+            tiBulbs.Clear();
+
+            Dictionary<DCurveBulb, DCurveBulb> bulbDict = new Dictionary<DCurveBulb, DCurveBulb>();
+
+            foreach (DCurveBulb origBulb in dBulbs)
+            {
+                DCurveBulb newBulb = origBulb.Duplicate();
+                tiBulbs.Add(newBulb);
+                bulbDict.Add(origBulb, newBulb);
+            }
+
+            foreach (DiscreteCurve dc in dCurves)
+            {
+                TorsionImpulseCurve impulseCurve = dc.MakeImpulseCurve();
+                tiCurves.Add(impulseCurve);
+                impulseCurve.transform.parent = transform;
+
+                if (dc.parentBulb)
+                {
+                    DCurveBulb newParent = bulbDict[dc.parentBulb];
+                    newParent.childCurves.Add(impulseCurve);
+                    impulseCurve.StartJuncture = newParent;
+                }
+
+                if (dc.childBulb)
+                {
+                    DCurveBulb newChild = bulbDict[dc.childBulb];
+                    newChild.parentCurve = impulseCurve;
+                    impulseCurve.EndJuncture = newChild;
+                }
+            }
+
+            tiCreated = true;
+        }
+
+        public void ConfirmTIC()
+        {
+            stage = CanvasStage.ImpulseCurve;
+
+            foreach (DCurveBulb db in dBulbs)
+            {
+                db.gameObject.SetActive(false);
+            }
+            foreach (DiscreteCurve dc in dCurves)
+            {
+                dc.gameObject.SetActive(false);
+            }
+        }
+
+        public void TICToTelescope()
+        {
+            // Create a telescope structure empty object
+            GameObject structureObj = new GameObject();
+            structureObj.name = "TelescopingStructure";
+            TelescopeStructure structure = structureObj.AddComponent<TelescopeStructure>();
+            structure.transform.parent = transform;
+
+            // Create dictionary to record created telescope junctures
+            Dictionary<DCurveBulb, TelescopeJuncture> bulbDict = new Dictionary<DCurveBulb, TelescopeJuncture>();
+
+            // Create all of the junctures, and hash the original abstract intersections to them
+            foreach (DCurveBulb dcb in tiBulbs)
+            {
+                TelescopeJuncture junct = TelescopeJuncture.CreateJuncture(dcb.transform.position, dcb.radius * Mathf.Sqrt(2));
+                bulbDict.Add(dcb, junct);
+                structure.junctures.Add(junct);
+                junct.transform.parent = structure.transform;
+            }
+
+            // Now we need to loop over all telescope segments,
+            // create the telescopes, and attach them to the correct junctions.
+            foreach (TorsionImpulseCurve tic in tiCurves)
+            {
+                // Set radius to match the radii at endpoints
+                float startRadius = tic.NumSegments * Constants.WALL_THICKNESS + 0.2f
+                    + (tic.ArcLength * Constants.TAPER_SLOPE);
+
+                TelescopeSegment seg;
+
+                // Need to address four cases, corresponding to whether or not
+                // the segment is connected to a juncture at the beginning and end.
+                // In this step, we just create telescopes with the appropriate radii.
+                if (tic.StartJuncture && tic.EndJuncture)
+                {
+                    if (tic.EndJuncture.radius > tic.StartJuncture.radius)
+                    {
+                        //startRadius = tic.EndJuncture.radius;
+                        startRadius = FindStartRadius(tic.StartJuncture.radius, tic.ArcLength, tic.NumSegments);
+                        seg = tic.MakeTelescope(startRadius, reverse: true);
+                    }
+                    else
+                    {
+                        //startRadius = tic.StartJuncture.radius;
+                        startRadius = FindStartRadius(tic.EndJuncture.radius, tic.ArcLength, tic.NumSegments);
+                        seg = tic.MakeTelescope(startRadius);
+                    }
+                }
+                else if (tic.StartJuncture && !tic.EndJuncture)
+                {
+                    startRadius = tic.StartJuncture.radius;
+                    seg = tic.MakeTelescope(startRadius);
+                }
+                else if (!tic.StartJuncture && tic.EndJuncture)
+                {
+                    startRadius = tic.EndJuncture.radius;
+                    seg = tic.MakeTelescope(startRadius, reverse: true);
+                }
+                else
+                {
+                    seg = tic.MakeTelescope(startRadius);
+                }
+
+                seg.transform.parent = structure.transform;
+                structure.segments.Add(seg);
+
+                seg.ExtendImmediate(1);
+
+                // Now we actually connect the telescopes.
+                // We look up which instantiated telescope object 
+                // the current segment should be connected to.
+                if (tic.StartJuncture)
+                {
+                    TelescopeJuncture bulb = bulbDict[tic.StartJuncture];
+                    seg.keepLocalPositionOnStart = true;
+                    seg.SetParent(bulb);
+
+                    bulb.childSegments.Add(seg);
+                }
+                if (tic.EndJuncture)
+                {
+                    TelescopeJuncture bulb = bulbDict[tic.EndJuncture];
+                    bulb.keepLocalPositionOnStart = true;
+                    bulb.SetParentToSegmentEnd(seg);
+                }
+
+                // Turn off all of the old objects.
+                foreach (DCurveBulb oldBulb in tiBulbs)
+                {
+                    oldBulb.gameObject.SetActive(false);
+                }
+
+                foreach (TorsionImpulseCurve oldTc in tiCurves)
+                {
+                    oldTc.gameObject.SetActive(false);
+                }
+            }
+
+            ActiveStructure = structure;
+            stage = CanvasStage.Telescope;
+        }
+
         void Update()
         {
             if (Input.GetKeyDown("page up"))
@@ -249,36 +447,7 @@ namespace Telescopes
 
                 if (Input.GetKey("left shift") && Input.GetKeyDown("p"))
                 {
-                    Dictionary<DraggablePoint, DCurveBulb> bulbDict = new Dictionary<DraggablePoint, DCurveBulb>();
-
-                    foreach (DraggablePoint bulb in bulbs)
-                    {
-                        DCurveBulb dcBulb = bulb.ConvertToBulb();
-                        dBulbs.Add(dcBulb);
-                        bulbDict.Add(bulb, dcBulb);
-                    }
-
-                    foreach (CatmullRomSpline spline in splines)
-                    {
-                        DiscreteCurve dc = spline.ConvertToDCurve();
-
-                        if (spline.StartBulb)
-                        {
-                            DCurveBulb parentOfSpline = bulbDict[spline.StartBulb];
-                            dc.parentBulb = parentOfSpline;
-                            parentOfSpline.childCurves.Add(dc);
-                        }
-                        if (spline.EndBulb)
-                        {
-                            DCurveBulb endOfSpline = bulbDict[spline.EndBulb];
-                            dc.childBulb = endOfSpline;
-                            endOfSpline.parentCurve = dc;
-                        }
-
-                        AddDCurve(dc);
-                    }
-
-                    stage = CanvasStage.DCurve;
+                    SplineToDCurve();
                 }
             }
 
@@ -286,64 +455,12 @@ namespace Telescopes
             {
                 if (Input.GetKey("left shift") && Input.GetKeyDown("o"))
                 {
-                    // Clear away the old stuff
-                    foreach (TorsionImpulseCurve tic in tiCurves)
-                    {
-                        Destroy(tic.gameObject);
-                    }
-                    tiCurves.Clear();
-
-                    foreach (DCurveBulb dcb in tiBulbs)
-                    {
-                        Destroy(dcb.gameObject);
-                    }
-                    tiBulbs.Clear();
-
-                    Dictionary<DCurveBulb, DCurveBulb> bulbDict = new Dictionary<DCurveBulb, DCurveBulb>();
-
-                    foreach (DCurveBulb origBulb in dBulbs)
-                    {
-                        DCurveBulb newBulb = origBulb.Duplicate();
-                        tiBulbs.Add(newBulb);
-                        bulbDict.Add(origBulb, newBulb);
-                    }
-
-                    foreach (DiscreteCurve dc in dCurves)
-                    {
-                        TorsionImpulseCurve impulseCurve = dc.MakeImpulseCurve();
-                        tiCurves.Add(impulseCurve);
-                        impulseCurve.transform.parent = transform;
-
-                        if (dc.parentBulb)
-                        {
-                            DCurveBulb newParent = bulbDict[dc.parentBulb];
-                            newParent.childCurves.Add(impulseCurve);
-                            impulseCurve.StartJuncture = newParent;
-                        }
-
-                        if (dc.childBulb)
-                        {
-                            DCurveBulb newChild = bulbDict[dc.childBulb];
-                            newChild.parentCurve = impulseCurve;
-                            impulseCurve.EndJuncture = newChild;
-                        }
-                    }
-
-                    tiCreated = true;
+                    DCurveToTIC();
                 }
 
                 else if (Input.GetKey("left shift") && Input.GetKeyDown("return") && tiCreated)
                 {
-                    stage = CanvasStage.ImpulseCurve;
-
-                    foreach (DCurveBulb db in dBulbs)
-                    {
-                        db.gameObject.SetActive(false);
-                    }
-                    foreach (DiscreteCurve dc in dCurves)
-                    {
-                        dc.gameObject.SetActive(false);
-                    }
+                    ConfirmTIC();
                 }
             }
 
@@ -352,104 +469,7 @@ namespace Telescopes
             {
                 if (Input.GetKey("left shift") && Input.GetKeyDown("i"))
                 {
-                    // Create a telescope structure empty object
-                    GameObject structureObj = new GameObject();
-                    structureObj.name = "TelescopingStructure";
-                    TelescopeStructure structure = structureObj.AddComponent<TelescopeStructure>();
-                    structure.transform.parent = transform;
-                    
-                    // Create dictionary to record created telescope junctures
-                    Dictionary<DCurveBulb, TelescopeJuncture> bulbDict = new Dictionary<DCurveBulb, TelescopeJuncture>();
-
-                    // Create all of the junctures, and hash the original abstract intersections to them
-                    foreach (DCurveBulb dcb in tiBulbs)
-                    {
-                        TelescopeJuncture junct = TelescopeJuncture.CreateJuncture(dcb.transform.position, dcb.radius * Mathf.Sqrt(2));
-                        bulbDict.Add(dcb, junct);
-                        structure.junctures.Add(junct);
-                        junct.transform.parent = structure.transform;
-                    }
-
-                    // Now we need to loop over all telescope segments,
-                    // create the telescopes, and attach them to the correct junctions.
-                    foreach (TorsionImpulseCurve tic in tiCurves)
-                    {
-                        // Set radius to match the radii at endpoints
-                        float startRadius = tic.NumSegments * Constants.WALL_THICKNESS + 0.2f
-                            + (tic.ArcLength * Constants.TAPER_SLOPE);
-
-                        TelescopeSegment seg;
-                        
-                        // Need to address four cases, corresponding to whether or not
-                        // the segment is connected to a juncture at the beginning and end.
-                        // In this step, we just create telescopes with the appropriate radii.
-                        if (tic.StartJuncture && tic.EndJuncture)
-                        {
-                            if (tic.EndJuncture.radius > tic.StartJuncture.radius)
-                            {
-                                //startRadius = tic.EndJuncture.radius;
-                                startRadius = FindStartRadius(tic.StartJuncture.radius, tic.ArcLength, tic.NumSegments);
-                                seg = tic.MakeTelescope(startRadius, reverse: true);
-                            }
-                            else
-                            {
-                                //startRadius = tic.StartJuncture.radius;
-                                startRadius = FindStartRadius(tic.EndJuncture.radius, tic.ArcLength, tic.NumSegments);
-                                seg = tic.MakeTelescope(startRadius);
-                            }
-                        }
-                        else if (tic.StartJuncture && !tic.EndJuncture)
-                        {
-                            startRadius = tic.StartJuncture.radius;
-                            seg = tic.MakeTelescope(startRadius);
-                        }
-                        else if (!tic.StartJuncture && tic.EndJuncture)
-                        {
-                            startRadius = tic.EndJuncture.radius;
-                            seg = tic.MakeTelescope(startRadius, reverse: true);
-                        }
-                        else
-                        {
-                            seg = tic.MakeTelescope(startRadius);
-                        }
-
-                        seg.transform.parent = structure.transform;
-                        structure.segments.Add(seg);
-
-                        seg.ExtendImmediate(1);
-
-                        // Now we actually connect the telescopes.
-                        // We look up which instantiated telescope object 
-                        // the current segment should be connected to.
-                        if (tic.StartJuncture)
-                        {
-                            TelescopeJuncture bulb = bulbDict[tic.StartJuncture];
-                            seg.keepLocalPositionOnStart = true;
-                            seg.SetParent(bulb);
-
-                            bulb.childSegments.Add(seg);
-                        }
-                        if (tic.EndJuncture)
-                        {
-                            TelescopeJuncture bulb = bulbDict[tic.EndJuncture];
-                            bulb.keepLocalPositionOnStart = true;
-                            bulb.SetParentToSegmentEnd(seg);
-                        }
-
-                        // Turn off all of the old objects.
-                        foreach (DCurveBulb oldBulb in tiBulbs)
-                        {
-                            oldBulb.gameObject.SetActive(false);
-                        }
-
-                        foreach (TorsionImpulseCurve oldTc in tiCurves)
-                        {
-                            oldTc.gameObject.SetActive(false);
-                        }
-                    }
-
-                    ActiveStructure = structure;
-                    stage = CanvasStage.Telescope;
+                    TICToTelescope();
                 }
             }
 

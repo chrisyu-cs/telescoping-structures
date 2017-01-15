@@ -291,7 +291,7 @@ namespace Telescopes
 
                 // Don't count the change if the dot product is too large, because this probably means
                 // we went past the end of the arc segment.
-                if (minDot > 0.25f) continue;
+                if (minDot > 0.3f) continue;
 
                 // Write out the parameters for the circle in the child shell
                 Vector3 closestTangent = FrameAlongHelix(child.curvature, child.torsion, closestArc).T;

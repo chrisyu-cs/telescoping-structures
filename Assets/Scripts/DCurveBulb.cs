@@ -20,6 +20,12 @@ namespace Telescopes
             }
         }
 
+        public void CopyPrevs(DCurveBulb old)
+        {
+            previousParentPosition = old.previousParentPosition;
+            previousParentTangent = old.previousParentTangent;
+        }
+
         private Vector3 previousParentPosition;
         private Vector3 previousParentTangent;
         public List<IParameterizedCurve> childCurves;
@@ -88,7 +94,7 @@ namespace Telescopes
                     transform.rotation = rotationBetween * transform.rotation;
                     transform.position = center;
                 }
-
+                
                 else
                 {
                     Vector3 newPosition = parentCurve.EndPosition;
@@ -113,7 +119,7 @@ namespace Telescopes
                         currentRadius = Vector3.Distance(dc.StartPosition, transform.position);
                         tangent = (dc.StartPosition - transform.position).normalized;
                     }
-                    Quaternion rotation = Quaternion.Inverse(rotationBetween);
+                    Quaternion rotation = rotationBetween;
                     if (dc != null) dc.RotateAndOffset(rotation, transform.position, rotation * tangent, currentRadius);
                 }
             }
