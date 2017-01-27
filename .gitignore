@@ -39,4 +39,5 @@ bulbOpt.log
 *.scad
 *.zip
 
+examples/*
 Pictures/*
