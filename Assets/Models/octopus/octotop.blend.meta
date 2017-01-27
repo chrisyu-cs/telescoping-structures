@@ -1,15 +1,33 @@
 fileFormatVersion: 2
-guid: 88d0d2d68e7f2a449af9ddd68d42cc95
-timeCreated: 1483992155
+guid: 4dcafc8ed5c9c5740b2624f1f066e6e0
+timeCreated: 1484507324
 licenseType: Free
 ModelImporter:
   serializedVersion: 19
   fileIDToRecycleName:
     100000: //RootNode
+    100002: snapshot0
+    100004: snapshot0_MeshPart0
+    100006: snapshot0_MeshPart1
+    100008: Sphere
     400000: //RootNode
-    2300000: //RootNode
-    3300000: //RootNode
-    4300000: octopus-top
+    400002: snapshot0
+    400004: snapshot0_MeshPart0
+    400006: snapshot0_MeshPart1
+    400008: Sphere
+    2300000: snapshot0_MeshPart0
+    2300002: snapshot0_MeshPart1
+    2300004: Sphere
+    2300006: //RootNode
+    3300000: snapshot0_MeshPart0
+    3300002: snapshot0_MeshPart1
+    3300004: Sphere
+    3300006: //RootNode
+    4300000: Sphere
+    4300002: snapshot0_MeshPart0
+    4300004: snapshot0_MeshPart1
+    4300006: octotop
+    7400000: Default Take
     9500000: //RootNode
   materials:
     importMaterials: 1

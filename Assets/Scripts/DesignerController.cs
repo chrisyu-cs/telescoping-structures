@@ -32,8 +32,6 @@ namespace Telescopes
 
         public Material defaultLineMaterial;
 
-        public InputCurve curve;
-
         public GameObject projectilePrefab;
         
         private float selectedDepth;
@@ -336,25 +334,6 @@ namespace Telescopes
                 segment.MakeAllShells(allParams);
                 segment.SetShellExtensions(1);
                 selected = null;
-            }
-        }
-
-        public void ExtrudeNewShell()
-        {
-            if (selected)
-            {
-                if (selected.IsTerminal())
-                {
-                    TelescopeSegment segment = selected.containingSegment;
-
-                    TelescopeParameters parentParams = selected.getParameters();
-                    TelescopeParameters childParams = parentParams + segment.DefaultChildDiff;
-                    if (childParams.radius < childParams.thickness || childParams.length < childParams.thickness) return;
-
-                    TelescopeShell childShell = segment.addChildShell(selected, parentParams, childParams, null, true);
-                    childShell.extendToRatio(1f, 2f);
-                    SelectShell(childShell);
-                }
             }
         }
 

@@ -37,7 +37,7 @@ namespace Telescopes.UI
                 }
             }
 
-            foreach (TelescopeParameters tp in ts.parameters)
+            for (int i = 0; i < ts.parameters.Count; i++)
             {
                 foldouts.Add(true);
             }

@@ -13,7 +13,6 @@ namespace UnityDDG
 
             Vector3[] meshVertices = m.vertices;
             int[] meshTriangles = m.triangles;
-            Vector3[] meshNormals = m.normals;
 
             List<EdgePair>[] vertsToEdges = new List<EdgePair>[meshVertices.Length];
 
@@ -26,7 +25,6 @@ namespace UnityDDG
                 int i2 = meshTriangles[3 * i + 1];
                 int i3 = meshTriangles[3 * i + 2];
 
-                TriangleTriple tri = new TriangleTriple(i1, i2, i3);
                 EdgePair e1 = new EdgePair(i1, i2);
                 EdgePair e2 = new EdgePair(i2, i3);
                 EdgePair e3 = new EdgePair(i3, i1);
@@ -227,8 +225,6 @@ namespace UnityDDG
                 int baseVertex = edgeIndices[0];
                 he.tailVertex = heVertices[baseVertex];
                 heVertices[baseVertex].anyHalfEdge = he;
-
-                EdgePair revEdge = new EdgePair(edgeIndices[1], edgeIndices[0]);
 
                 // If the edge object has not been created yet, create it
                 if (he.edge == null)

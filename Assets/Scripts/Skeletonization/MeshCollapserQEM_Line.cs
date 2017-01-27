@@ -207,8 +207,6 @@ namespace Telescopes
             Debug.Log("Visited " + numVisited + " / " + visited.Length);
         }
 
-        static float hue = 0;
-
         CatmullRomSpline AddLine(List<int> pointIndices)
         {
 

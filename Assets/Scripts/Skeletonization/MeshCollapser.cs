@@ -16,8 +16,6 @@ namespace Telescopes
         Dictionary<EdgePair, Triangle> edgeToTri;
         HashSet<int>[] identifiedPoints;
 
-        UnionFind<VertexNode> quadricUF;
-
         TriangleNode[] triNodes;
         
         HashSet<int>[] adjacency;
@@ -336,8 +334,6 @@ namespace Telescopes
             Debug.Log("Visited " + numVisited + " / " + visited.Length);
         }
 
-        static float hue = 0;
-
         void AddLine(List<int> pointIndices)
         {
             if (!outputCanvas)
@@ -482,7 +478,6 @@ namespace Telescopes
                 Debug.Log("Set up PQ finished in " + diff + " seconds");
 
                 startTime = Time.realtimeSinceStartup;
-                quadricUF = VertexNode.MakeUnionFind(heMesh);
                 endTime = Time.realtimeSinceStartup;
                 diff = endTime - startTime;
                 Debug.Log("Make union-find finished in " + diff + " seconds");

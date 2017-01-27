@@ -5,8 +5,8 @@ namespace Telescopes
 {
     public static class Constants
     {
-        public const bool PIN_ENDPOINTS = false;
-        public const bool ADD_SUPPORT_CHANNELS = true;
+        public static bool PIN_ENDPOINTS = false;
+        public static bool ADD_SUPPORT_CHANNELS = true;
 
         public const float MM_PER_UNIT = 40f;
 

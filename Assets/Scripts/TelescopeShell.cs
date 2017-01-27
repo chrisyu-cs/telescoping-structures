@@ -28,12 +28,6 @@ namespace Telescopes
         public bool isRoot = false;
         public float extensionRatio = 0;
 
-        private float oldRatio = 0;
-        private float interpTimespan = 0;
-        private bool currentlyInterp = false;
-        private float targetRatio = 0;
-        private float ratioInterpTime = 0;
-
         public TelescopeSegment containingSegment;
 
         List<Vector3> bottomVerts;
@@ -163,7 +157,7 @@ namespace Telescopes
         {
             if (curvature > 1e-6)
             {
-                // Compute how many radians along the circle we moved.
+                // Convert normalized length to arc length.
                 float arcLength = t * length;
                 Quaternion rotation = rotationOfDistance(arcLength, curvature, torsion);
                 return rotation;
@@ -250,7 +244,6 @@ namespace Telescopes
                     }
                     else if (addOuterGroove)
                     {
-                        float shrinkFromLength = length * Constants.TAPER_SLOPE;
                         radiusOffset = (thickness - Constants.SHELL_GAP / 2) * Constants.INDENT_RATIO;
                     }
                 }
@@ -723,15 +716,6 @@ namespace Telescopes
         }
         #endregion
 
-        public void extendToRatio(float targetT, float overTime)
-        {
-            interpTimespan = overTime;
-            oldRatio = extensionRatio;
-            targetRatio = targetT;
-            ratioInterpTime = 0;
-            currentlyInterp = true;
-        }
-
         public void SetTransform()
         {
             float extendT = Mathf.Clamp01(extensionRatio * 2);
@@ -807,6 +791,38 @@ namespace Telescopes
             return transform.rotation * movedTangent;
         }
 
+        public Vector3 StartPointWS
+        {
+            get
+            {
+                return CenterPointWS(0f);
+            }
+        }
+
+        public Vector3 StartTangentWS
+        {
+            get
+            {
+                return CenterTangentWS(0f);
+            }
+        }
+
+        public Vector3 EndPointWS
+        {
+            get
+            {
+                return CenterPointWS(1f);
+            }
+        }
+
+        public Vector3 EndTangentWS
+        {
+            get
+            {
+                return CenterTangentWS(1f);
+            }
+        }
+
         public bool CollidesWith(TelescopeShell otherShell, out float moveDistance, out Vector3 contactNormal)
         {
             float tStep = 1f / (Constants.CUTS_PER_CYLINDER - 1);
@@ -814,9 +830,6 @@ namespace Telescopes
 
             float minDistance = 1001f;
             contactNormal = Vector3.zero;
-
-            Vector3 closestRing = Vector3.zero;
-            Vector3 closestOther = Vector3.zero;
 
             int thisShellCuts = Constants.CUTS_PER_CYLINDER;
             if (HasOverhang) thisShellCuts += Constants.OVERHANG_CUTS;
@@ -862,9 +875,6 @@ namespace Telescopes
                                 minDistance = planeDist;
                                 Vector3 otherRingCenter = otherShell.CenterPointWS(cut * tStep);
                                 contactNormal = (otherRingCenter - ringCenter).normalized;
-
-                                closestRing = ringCenter;
-                                closestOther = otherVert;
                             }
                         }
                     }

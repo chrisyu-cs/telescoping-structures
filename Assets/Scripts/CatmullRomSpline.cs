@@ -15,7 +15,6 @@ namespace Telescopes
 
         public int pointsPerSegment = 20;
 
-        private bool needsUpdate = false;
         public bool randomize = false;
 
         private List<DraggablePoint> spheres;
@@ -301,8 +300,6 @@ namespace Telescopes
             lineRender.SetVertexCount(renderPoints.Count);
             lineRender.SetPositions(renderPoints.ToArray());
             lineRender.SetColors(Color.white, Color.red);
-
-            needsUpdate = false;
         }
 
         public DraggablePoint GetSphere(int i)

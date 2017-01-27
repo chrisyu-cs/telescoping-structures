@@ -28,6 +28,14 @@ namespace Telescopes
         float sphereRadius;
         public float Radius;
 
+        public Mesh JunctureMesh
+        {
+            get
+            {
+                return mFilter.mesh;
+            }
+        }
+
         public Vector3 WorldSpaceMin
         {
             get

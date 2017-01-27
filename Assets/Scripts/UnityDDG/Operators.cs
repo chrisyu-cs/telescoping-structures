@@ -50,7 +50,6 @@ namespace UnityDDG
                     // This is edge e(i -> j), which is the one we're
                     // actually computing the matrix element for
                     HalfEdge heCenter = hePrev.flip.next;
-                    Vector3 e_ij = heCenter.headVertex.position - heCenter.tailVertex.position;
 
                     // This is edge e(i -> b)
                     HalfEdge heNext = heCenter.flip.next;
