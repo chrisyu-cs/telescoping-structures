@@ -159,6 +159,18 @@ namespace Telescopes
                 }
             }
 
+            else if (Input.GetKeyDown("r") && RaycastShells(Input.mousePosition, out hitInfo))
+            {
+                DraggablePoint draggablePt = hitInfo.collider.GetComponent<DraggablePoint>();
+
+                if (draggablePt && draggablePt.parentSpline)
+                {
+                    Debug.Log("Reverse " + draggablePt.parentSpline.name);
+                    draggablePt.parentSpline.Reverse();
+                }
+            }
+
+
             else if (Input.GetKeyDown("j") && RaycastShells(Input.mousePosition, out hitInfo))
             {
                 DraggablePoint draggablePt = hitInfo.collider.GetComponent<DraggablePoint>();

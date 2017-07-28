@@ -475,7 +475,7 @@ namespace Telescopes
 
             else if (stage == CanvasStage.Telescope)
             {
-                if (Input.GetKey("left shift") && Input.GetKeyDown("enter") && ActiveStructure)
+                if (Input.GetKey("left shift") && Input.GetKeyDown("return") && ActiveStructure)
                 {
                     ActiveStructure.GenerateSCAD();
                 }

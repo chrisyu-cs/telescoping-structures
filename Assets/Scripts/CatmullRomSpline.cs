@@ -36,6 +36,35 @@ namespace Telescopes
             lineRender.SetWidth(0.1f, 0.1f);
         }
 
+        /// <summary>
+        /// Reverses this entire spline.
+        /// </summary>
+        public void Reverse()
+        {
+            DraggablePoint oldStart = StartBulb;
+            DraggablePoint oldEnd = EndBulb;
+
+            // Remove connections
+            if (StartBulb) StartBulb.RemoveSplineStart(this);
+            if (EndBulb) EndBulb.RemoveSplineEnd(this);
+
+            // Reverse points and recreate everything
+            points.Reverse();
+            makeSegments();
+            createSpheres();
+            updateRenderPoints();
+
+            // Reconnect to bulbs, reversed
+            if (oldEnd)
+            {
+                spheres[1].AttachToBulb(oldEnd);
+            }
+            if (oldStart)
+            {
+                spheres[spheres.Count - 2].AttachToBulb(oldStart);
+            }
+        }
+
         // Use this for initialization
         void Start()
         {
@@ -561,6 +590,24 @@ namespace Telescopes
         public CatmullRomSegment(Vector3 v0, Vector3 v1, Vector3 v2, Vector3 v3)
         {
             ResetPositions(v0, v1, v2, v3);
+        }
+
+        /// <summary>
+        /// Reverse the points of this spline segment.
+        /// </summary>
+        public void Reverse()
+        {
+            Vector3 old0 = P0;
+            Vector3 old1 = P1;
+            Vector3 old2 = P2;
+            Vector3 old3 = P3;
+
+            P0 = old3;
+            P1 = old2;
+            P2 = old1;
+            P3 = old0;
+
+            recomputeParameters();
         }
 
         public void ResetPositions(Vector3 v0, Vector3 v1, Vector3 v2, Vector3 v3)

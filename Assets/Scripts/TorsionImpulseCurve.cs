@@ -101,7 +101,7 @@ namespace Telescopes
             lRenderer.SetPositions(displayPoints.ToArray());
             lRenderer.SetWidth(0.1f, 0.1f);
 
-            Debug.Log("Arc length of TIC = " + ArcLength);
+            //Debug.Log("Arc length of TIC = " + ArcLength);
         }
 
         public Vector3 StartTangent
@@ -193,6 +193,22 @@ namespace Telescopes
             {
                 CurveSegment cs = segments[i];
                 cs.startPosition += offset;
+                segments[i] = cs;
+            }
+
+            Redraw();
+        }
+
+        /// <summary>
+        /// Scales this curve by the given factor.
+        /// </summary>
+        /// <param name="scaleFactor"></param>
+        public void Scale(float scaleFactor)
+        {
+            for (int i = 0; i < segments.Count; i++)
+            {
+                CurveSegment cs = segments[i];
+                cs.arcLength *= scaleFactor;
                 segments[i] = cs;
             }
 

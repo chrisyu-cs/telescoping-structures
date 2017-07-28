@@ -82,6 +82,8 @@ namespace Telescopes
         /// </summary>
         public void GenerateSCAD()
         {
+            Debug.Log("Exporting structure...");
+
             Directory.CreateDirectory("scad");
             Directory.CreateDirectory("scad/stls");
 
@@ -111,8 +113,11 @@ namespace Telescopes
                 shellSTLs.Add(segSTLs);
             }
 
+            string fname = "scad/" + name + ".scad";
+            Debug.Log("Writing OpenSCAD file of telescope to " + fname);
+
             // Finally output a .scad file that combines all of the things we just exported
-            using (StreamWriter file = new StreamWriter("scad/" + name + ".scad"))
+            using (StreamWriter file = new StreamWriter(fname))
             {
                 file.WriteLine("union() {");
                 

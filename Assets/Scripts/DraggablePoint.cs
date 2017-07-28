@@ -9,7 +9,13 @@ namespace Telescopes
         public float radius;
         public CatmullRomSpline parentSpline;
 
+        /// <summary>
+        /// List of splines considering this to be their start bulb.
+        /// </summary>
         List<CatmullRomSpline> splinesStart = new List<CatmullRomSpline>();
+        /// <summary>
+        /// List of splines considering this to be their end bulb.
+        /// </summary>
         List<CatmullRomSpline> splinesEnd = new List<CatmullRomSpline>();
 
         public SplineCanvas containingCanvas;
@@ -35,6 +41,24 @@ namespace Telescopes
             }
         }
 
+        public void RemoveSplineStart(CatmullRomSpline spline)
+        {
+            if (spline.StartBulb == this)
+            {
+                splinesStart.Remove(spline);
+                spline.StartBulb = null;
+            }
+        }
+
+        public void RemoveSplineEnd(CatmullRomSpline spline)
+        {
+            if (spline.EndBulb == this)
+            {
+                splinesEnd.Remove(spline);
+                spline.EndBulb = null;
+            }
+        }
+
         public void AttachToBulb(DraggablePoint bulb)
         {
             if (Type == PointType.Bulb) return;
@@ -50,7 +74,9 @@ namespace Telescopes
                 parentSpline.EndBulb = bulb;
                 splinesEnd.Add(parentSpline);
             }
-            else return;
+            else {
+                return;
+            }
         }
 
         public bool IsEndPoint()

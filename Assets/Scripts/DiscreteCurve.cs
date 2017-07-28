@@ -590,7 +590,7 @@ namespace Telescopes
                 numImpulses = Mathf.Max(Mathf.Min(numImpulses, maxNumShells), 2);
             }
 
-            Debug.Log("Max num shells = " + maxNumShells + ", numImpulses = " + numImpulses);
+            //Debug.Log("Max num shells = " + maxNumShells + ", numImpulses = " + numImpulses);
 
             return numImpulses;
         }
@@ -602,24 +602,46 @@ namespace Telescopes
 
             int numImpulses = ComputeNumImpulses();
 
+            TorsionImpulseCurve tic;
+
             List<float> points = EvenlySpacedPoints(numImpulses);
             if (isShiftKeyDown)
             {
-                if (DesignerController.instance.UseSparseSolve) return SolveImpulseLPSparse(points);
+                if (DesignerController.instance.UseSparseSolve)
+                {
+                    tic = SolveImpulseLPSparse(points);
+                }
                 else
                 {
                     var tup = SolveImpulseLP(points, makeCurve: false);
                     float slope = tup.Item1;
                     List<float> impulses = tup.Item2;
-                    return MakeTorsionImpulseCurve(impulses, points, slope);
+                    tic = MakeTorsionImpulseCurve(impulses, points, slope);
                 }
             }
             else if (isAltKeyDown)
             {
                 Debug.Log("Alt down");
-                return SolveImpulsesVariableQP(points);
+                tic = SolveImpulsesVariableQP(points);
             }
-            else return SolveImpulsesQP(points);
+            else tic = SolveImpulsesQP(points);
+
+            if (Constants.PIN_ENDPOINTS)
+            {
+                Vector3 ticStart = tic.StartPosition;
+                Vector3 ticEnd = tic.EndPosition;
+                Vector3 ticOffset = ticEnd - ticStart;
+
+                Vector3 thisOffset = EndPosition - StartPosition;
+                Quaternion rotBetween = Quaternion.FromToRotation(ticOffset, thisOffset);
+
+                tic.Rotate(rotBetween);
+
+                float scaleRatio = thisOffset.magnitude / ticOffset.magnitude;
+                tic.Scale(scaleRatio);
+            }
+
+            return tic;
         }
 
         List<float> EvenlySpacedPoints(int num)

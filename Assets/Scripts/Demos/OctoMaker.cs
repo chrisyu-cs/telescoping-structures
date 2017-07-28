@@ -97,6 +97,7 @@ namespace Telescopes.Playground
                     TelescopeSegment seg = canvas.ActiveStructure.segments[i];
                     TelescopeIK ik = seg.gameObject.AddComponent<TelescopeIK>();
 
+                    ik.FreezeFirst = true;
                     ik.target = obj.transform;
                 }
 

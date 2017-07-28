@@ -12,6 +12,8 @@ namespace Telescopes.Playground
 
         public float maxDegPerSecond = 20f;
 
+        public bool FreezeFirst = false;
+
         // Use this for initialization
         void Start()
         {
@@ -22,6 +24,7 @@ namespace Telescopes.Playground
         {
             // Apply first telescope separately
             float firstAngle = angles[0];
+            if (FreezeFirst) firstAngle = 0;
 
             // Since the first telescope is free, we just apply rotation about the tangent
             Vector3 firstTangent = segment.shells[0].transform.forward;

@@ -63,10 +63,11 @@ namespace Telescopes
                 }
             }
 
+            /*
             GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             sphere.transform.parent = transform;
             sphere.transform.localScale = new Vector3(0.1f, 0.1f, 0.1f);
-            sphere.transform.localPosition = Vector3.zero;
+            sphere.transform.localPosition = Vector3.zero; */
 
             line = gameObject.AddComponent<LineRenderer>();
             line.useWorldSpace = false;
